@@ -56,5 +56,5 @@ npm ci
 npm run build      # dist/celestial-toolbox.user.js, dist/celestial-toolbox.js, dist/index.html
 ```
 
-GitHub Actions (`.github/workflows/pages.yml`) buduje projekt i publiczuje `dist/` na GitHub Pages.
+GitHub Actions (`.github/workflows/pages.yml`) buduje projekt i publikuje `dist/` na GitHub Pages.
 Wymaga włączenia Pages w ustawieniach repo (Source: GitHub Actions).
