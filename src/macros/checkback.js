@@ -56,7 +56,9 @@ const SP_PETS = [
   { name: "Kres", key: "kres", base: 10 },
   { name: "Nav", key: "nav", base: 20 },
   { name: "Sel", key: "sel", base: 30 },
+  { name: "Eclipse", key: "eclipse", base: 40 },
 ];
+const spUnlocked = pet => Boolean(window.tmp.sp.buyables[pet.base + 1]?.unlocked);
 
 export const singularityPets = {
   id: "singularity-pets",
@@ -64,7 +66,7 @@ export const singularityPets = {
   group: "Check Back",
   every: 4,
   description:
-    "Gdy punkty Kres/Nav/Sel są pełne: kupuje Stats, potem pozostałe buyables tańsze niż ułamek pojemności " +
+    "Gdy punkty Kres/Nav/Sel/Eclipse są pełne: kupuje Stats, potem pozostałe buyables tańsze niż ułamek pojemności " +
     "(od najtańszych), a jeśli nic nie kupiło — Capacity.",
   params: [
     { key: "cheapFraction", label: "Próg „tanie” (ułamek pojemności)", type: "number", default: 0.2, min: 0, max: 1, step: 0.05 },
@@ -74,6 +76,7 @@ export const singularityPets = {
   onEnable() {
     // Sprawdzenie, czy układ buyables się nie zmienił (x1 = Capacity, x2 = Stats).
     for (const pet of SP_PETS) {
+      if (!spUnlocked(pet)) continue;
       const b = window.layers.sp.buyables;
       const t = id => String(typeof b[id]?.title === "function" ? b[id].title() : b[id]?.title ?? "");
       if (!/capacity/i.test(t(pet.base + 1)) || !/stats/i.test(t(pet.base + 2))) {
@@ -85,6 +88,7 @@ export const singularityPets = {
     const sp = window.player.sp;
     const report = [];
     for (const pet of SP_PETS) {
+      if (!spUnlocked(pet)) continue;
       const result = spendWhenFull(ctx, {
         layer: "sp",
         points: () => sp[pet.key + "Points"],
