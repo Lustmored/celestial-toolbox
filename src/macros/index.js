@@ -6,6 +6,7 @@ import { hexVexes } from "./hex.js";
 import { casinoKiller, smaAutoEnter } from "./darkness.js";
 import { spaceDust } from "./space.js";
 import { petShop, fragmentShop } from "./shops.js";
+import { rocketPassengers } from "./rocket.js";
 
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -13,4 +14,5 @@ export default [
   hexVexes,
   casinoKiller, smaAutoEnter,
   spaceDust,
+  rocketPassengers,
 ];
