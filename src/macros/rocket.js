@@ -140,27 +140,46 @@ export const rocketMaker = {
   group: "Rockets (U2)",
   every: 0,
   description:
-    "Na zmianę klika „Make Activated Fuel” i „Make Rocket Parts” (jedno kliknięcie na tick gry, jak trzymanie Entera), " +
-    "dopóki go nie wyłączysz. Każde kliknięcie robi singularity, tak jak ręcznie. Bez upgrade'u gwiazd " +
-    "„SMA i Moonstone niepotrzebne do części” nie klika części, bo zerowałoby to SMA.",
+    "Na zmianę klika „Make Rocket Parts” i „Make Activated Fuel”, dopóki go nie wyłączysz. Każde kliknięcie robi singularity, " +
+    "który zeruje m.in. steel, więc makro klika wtedy, gdy zysk na sekundę od poprzedniego kliknięcia jest największy, " +
+    "i pomija kliknięcia poniżej minimum. Bez upgrade'u gwiazd „SMA i Moonstone niepotrzebne do części” nie klika części.",
   params: [
+    { key: "minParts", label: "Min. części z kliknięcia", type: "number", default: 1, min: 1, step: 1 },
+    { key: "minFuel", label: "Min. paliwa z kliknięcia", type: "number", default: 1, min: 1, step: 1 },
+    { key: "maxWait", label: "Maks. czekanie na odrost (s)", type: "number", default: 5, min: 0, step: 0.5 },
     { key: "partsWithout203", label: "Klikaj części także bez upgrade'u za 333k (zeruje SMA)", type: "bool", default: false },
   ],
   available: g => g.layerActive("ro"),
   run(ctx) {
     const st = ctx.state;
-    const partsOk = ctx.p.partsWithout203 || window.player.st.buyables[203].gte(1);
-    // Na zmianę, żeby drugie kliknięcie w tym samym ticku nie korzystało z wartości sprzed resetu.
-    const order = st.next === "parts" && partsOk ? [12, 11] : partsOk ? [11, 12] : [11];
-    for (const id of order) {
-      if (ctx.click("ro", id, { refresh: true })) {
-        ctx.did();
-        st.next = id === 11 ? "parts" : "fuel";
-        break;
-      }
-    }
     const ro = window.player.ro;
+    const partsOk = ctx.p.partsWithout203 || window.player.st.buyables[203].gte(1);
+    const next = partsOk ? (st.next ?? "parts") : "fuel";
+    const id = next === "parts" ? 12 : 11;
+    const gain = Number(next === "parts" ? ro.rocketPartsToGet : ro.activatedFuelToGet);
+    const min = next === "parts" ? ctx.p.minParts : ctx.p.minFuel;
+    const now = performance.now();
+
+    // Klikamy, gdy zysk na sekundę od poprzedniego kliknięcia przestaje rosnąć — dalsze czekanie
+    // dałoby więcej z jednego kliknięcia, ale mniej na minutę.
+    if (st.waitFor !== next) { st.waitFor = next; st.since = now; st.peak = 0; }
+    const waited = Math.max(0.05, (now - (st.since ?? now)) / 1000);
+    const rate = gain / waited;
+    const pastPeak = st.peak > 0 && rate < st.peak * 0.98;
+    st.peak = Math.max(st.peak ?? 0, rate);
+    const ready = gain >= min && (pastPeak || waited >= ctx.p.maxWait);
+
+    if (ready && ctx.click("ro", id, { refresh: true })) {
+      ctx.did();
+      st.next = next === "parts" ? "fuel" : "parts";
+      st.waitFor = null;
+    } else if (waited >= ctx.p.maxWait && gain < min && partsOk) {
+      // Nic nie odrosło w limicie — przejdź do drugiego przycisku zamiast stać.
+      st.next = next === "parts" ? "fuel" : "parts";
+      st.waitFor = null;
+    }
     ctx.status(`paliwo ${window.format(ro.activatedFuel)} · części ${window.format(ro.rocketParts)} · gwiazdy za start ${window.format(window.player.au2.starsToGet)}` +
+      ` · czekam na ${next === "parts" ? "części" : "paliwo"} (${window.format(gain)})` +
       (partsOk ? "" : " · części wyłączone (brak upgrade'u 333k)"));
   },
 };
