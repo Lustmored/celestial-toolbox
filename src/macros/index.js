@@ -4,10 +4,12 @@ import { cbClaimAll, dotKnight, fragmentation, singularityPets } from "./checkba
 import { moonstone, repliGrass } from "./grids.js";
 import { hexVexes } from "./hex.js";
 import { casinoKiller, smaAutoEnter } from "./darkness.js";
+import { spaceDust } from "./space.js";
 
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets,
   moonstone, repliGrass,
   hexVexes,
   casinoKiller, smaAutoEnter,
+  spaceDust,
 ];

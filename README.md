@@ -26,6 +26,11 @@ Bez wtyczki: na tej samej stronie jest bookmarklet.
 - Makra wywołują funkcje gry (`clickClickable`, `buyBuyable`, `buyUpgrade`, `onHover` siatek), a nie klikają w DOM.
 - Błąd w makrze nie psuje pętli gry. Po 3 błędach z rzędu makro samo się wyłącza.
 
+## Makra
+
+CB Claim All, Dot Knight, Fragmentation, Singularity Pets, Moonstone Killer, Repli-Grass, Hex of Vexes, Casino Killer, SMA Auto-enter, Space Dust.
+Singularity Pets i Space Dust używają wspólnej reguły „zapełniło się → wydaj” (`src/macros/lib/spendWhenFull.js`).
+
 ## Dodanie makra
 
 Nowy plik w `src/macros/` (albo dopisanie do istniejącego) i wpis w `src/macros/index.js`:

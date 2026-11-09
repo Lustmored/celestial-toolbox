@@ -1,3 +1,5 @@
+import { spendWhenFull } from "./lib/spendWhenFull.js";
+
 // Check Back: Claim All, Dot Knight, Fragmentation, Singularity Pets.
 
 export const cbClaimAll = {
@@ -81,33 +83,19 @@ export const singularityPets = {
   },
   run(ctx) {
     const sp = window.player.sp;
-    const cost = id => ctx.D(window.tmp.sp.buyables[id]?.cost);
-    const buy = (pet, id) => {
-      const price = cost(id);
-      if (!price.gt(0) || ctx.D(sp[pet.key + "Points"]).lt(price)) return false;
-      if (!ctx.buyOne("sp", id)) return false;
-      ctx.did();
-      return true;
-    };
     const report = [];
     for (const pet of SP_PETS) {
-      const pts = ctx.D(sp[pet.key + "Points"]);
-      const max = ctx.D(sp[pet.key + "PointsMax"]);
-      if (!max.gt(0) || pts.lt(max)) continue;
-
-      const capacity = pet.base + 1;
-      const stats = pet.base + 2;
-      let bought = 0;
-      if (buy(pet, stats)) bought++;
-
-      const others = [3, 4, 5].map(n => pet.base + n).sort((a, b) => cost(a).cmp(cost(b)));
-      for (const id of others) {
-        if (bought >= ctx.p.maxPerPet) break;
-        const limit = ctx.D(sp[pet.key + "PointsMax"]).mul(ctx.p.cheapFraction);
-        if (cost(id).lt(limit) && buy(pet, id)) bought++;
-      }
-      if (bought === 0 && buy(pet, capacity)) report.push(pet.name + ": Capacity");
-      else if (bought) report.push(`${pet.name}: ${bought} zakup(y)`);
+      const result = spendWhenFull(ctx, {
+        layer: "sp",
+        points: () => sp[pet.key + "Points"],
+        max: () => sp[pet.key + "PointsMax"],
+        first: [pet.base + 2],
+        others: [3, 4, 5].map(n => pet.base + n),
+        capacity: pet.base + 1,
+        cheapFraction: ctx.p.cheapFraction,
+        maxBuys: ctx.p.maxPerPet,
+      });
+      if (result) report.push(`${pet.name}: ${result}`);
     }
     if (report.length) ctx.status(report.join(", "));
   },
