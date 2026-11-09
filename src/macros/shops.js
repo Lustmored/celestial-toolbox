@@ -32,12 +32,17 @@ const tabVisible = (group, name) => {
 };
 const clickVisible = id => Boolean(id && window.tmp.pet.clickables[id]?.unlocked);
 
-function nextLevelNeed(pid) {
+/** XP brakujące do następnego poziomu (ujemne = nadwyżka), null gdy pet jest na limicie poziomu. */
+function shortfall(pid) {
   const d = pet().levelables[pid];
   const t = window.tmp.pet.levelables[pid];
   if (!d || !t?.unlocked) return null;
   if (window.Decimal.gte(d[0], t.levelLimit)) return null; // max poziom dla tego tieru
-  return Math.max(0, Math.ceil(Number(window.Decimal.sub(t.xpReq, d[1]))));
+  return Math.ceil(Number(window.Decimal.sub(t.xpReq, d[1])));
+}
+function nextLevelNeed(pid) {
+  const s = shortfall(pid);
+  return s === null ? null : Math.max(0, s);
 }
 
 function levelUp(pid) {
@@ -74,17 +79,51 @@ const GROUPS = {
   rare: { tab: "Rare", first: 301 },
 };
 
+// Wzory kosztu z gry (Pet Shop): pety base×(0,05b+0,95)×b, shardy base×(0,1b+0,9)×b.
+const petCost = (base, b) => base * (0.05 * b + 0.95) * b;
+// petShopBase to w grze globalny `const` — jest w zasięgu skryptu, ale nie na window.
+/* global petShopBase */
+const shopBase = (group, j) => {
+  const table = typeof petShopBase !== "undefined" ? petShopBase : null;
+  const v = table?.[group]?.[j];
+  if (v === undefined) throw new Error(`Brak ceny bazowej ${group}[${j}] w grze`);
+  return Number(v);
+};
+const shardCost = (base, b) => base * (0.1 * b + 0.9) * b;
+
+/**
+ * Zapas XP pod Fragmentation: jeśli pet jest teraz w bannerze, ile XP zużyje do najbliższego resetu bannerów
+ * (liczba fragmentacji do resetu × koszt jednej).
+ */
+function fragmentationBuffer(pid) {
+  const p = pet();
+  let extra = 0;
+  const eff = window.levelableEffect("pet", 310)[0];
+  for (const b of Object.values(p.banners ?? {})) {
+    if (Number(b.id) !== pid) continue;
+    const per = Math.ceil(Number(b.val.div(eff)));
+    const runs = Math.ceil(Math.max(0, Number(p.bannerResetTimer) - Math.max(0, Number(b.current))) / Math.max(1, Number(b.max))) + 1;
+    extra += per * runs;
+  }
+  return extra;
+}
+
 export const petShop = {
   id: "pet-shop",
   name: "Pet Shop",
   group: "Check Back",
   every: 5,
   description:
-    "Gdy pozycja w Pet Shopie jest gotowa, kupuje dokładnie tyle petów, ile brakuje do ich następnego poziomu, i od razu go awansuje. " +
-    "Opcjonalnie kupuje Paragon Shardy z ustalonym bulkiem. Twój bulk i wybrana pozycja są przywracane.",
+    "Paragon Shardy: gdy są gotowe, kupuje największy bulk (w granicach min–max), który kosztuje najwyżej podany % obecnych PP; " +
+    "dopóki nie stać go na minimum, pety nie wydają PP poniżej progu potrzebnego na ten zakup. " +
+    "Pety: w każdej grupie zaczyna od tych, którym awans wychodzi najtaniej; kupuje tyle, ile brakuje do następnego poziomu " +
+    "(plus zapas XP pod Fragmentation dla petów z bannerów) i od razu awansuje. Twój bulk i wybrana pozycja są przywracane.",
   params: [
     { key: "order", label: "Kolejność grup", type: "text", default: "rare uncommon common" },
-    { key: "paragonBulk", label: "Paragon Shardy: bulk (0 = nie kupuj)", type: "number", default: 10, min: 0, step: 1 },
+    { key: "paragonPct", label: "Paragon Shardy: maks. % obecnych PP (0 = nie kupuj)", type: "number", default: 40, min: 0, max: 100, step: 5 },
+    { key: "paragonMin", label: "Paragon Shardy: minimalny bulk", type: "number", default: 5, min: 1, step: 1 },
+    { key: "paragonMax", label: "Paragon Shardy: maksymalny bulk", type: "number", default: 20, min: 1, step: 1 },
+    { key: "fragBuffer", label: "Zapas XP pod Fragmentation dla petów z bannerów", type: "bool", default: true },
     { key: "reserve", label: "Zostaw co najmniej PP", type: "number", default: 0, min: 0, step: 1000 },
     { key: "maxCost", label: "Maks. koszt jednego zakupu peta (PP)", type: "number", default: 100000, min: 0, step: 1000 },
   ],
@@ -92,39 +131,58 @@ export const petShop = {
   run(ctx) {
     shopSel ??= selectors("player.pet.shopIndex");
     const p = pet();
-    const pp = () => window.player.cb.petPoints;
-    const afford = (cost, limit = ctx.p.maxCost) => pp().sub(cost).gte(ctx.p.reserve) && cost.lte(limit);
+    const pp = () => Number(window.player.cb.petPoints);
     const bought = [];
+    let reserve = ctx.p.reserve;
     withRestore(["shopIndex", "shopInput"], () => {
-      // Paragon Shardy (Misc.)
-      if (ctx.p.paragonBulk > 0 && tabVisible("shopTabs", "Misc.") && clickVisible(shopSel[2]) && p.shop.shard[1].current.lt(0)) {
-        p.shopIndex = 2;
-        setBulk("shopInput", ctx.p.paragonBulk);
-        const cost = p.shop.shard[1].cost;
-        if (afford(cost, Infinity) && ctx.click("pet", 1003, { refresh: true })) { ctx.did(); bought.push(`${ctx.p.paragonBulk} PS`); }
+      // --- Paragon Shardy (Misc.) ---
+      const psBase = shopBase("shard", 1);
+      if (ctx.p.paragonPct > 0 && tabVisible("shopTabs", "Misc.") && clickVisible(shopSel[2]) && p.shop.shard[1].current.lt(0)) {
+        const budget = Math.min(pp() * ctx.p.paragonPct / 100, pp() - ctx.p.reserve);
+        let bulk = 0;
+        for (let b = ctx.p.paragonMax; b >= ctx.p.paragonMin; b--) if (shardCost(psBase, b) <= budget) { bulk = b; break; }
+        if (bulk) {
+          p.shopIndex = 2;
+          setBulk("shopInput", bulk);
+          if (ctx.click("pet", 1003, { refresh: true })) { ctx.did(); bought.push(`${bulk} PS`); }
+        } else {
+          // Odkładamy PP, aż minimalny zakup zmieści się w limicie %.
+          reserve = Math.max(reserve, shardCost(psBase, ctx.p.paragonMin) * 100 / ctx.p.paragonPct);
+        }
       }
+      // --- Pety: w każdej grupie najpierw najtańsze awanse ---
       for (const name of String(ctx.p.order).split(/\s+/).filter(Boolean)) {
         const g = GROUPS[name];
         if (!g || !tabVisible("shopTabs", g.tab)) continue;
+        const cands = [];
         for (let j = 0; j < 9; j++) {
           const idx = g.first + j;
           const item = p.shop[name]?.[j];
           if (!item || !clickVisible(shopSel[idx]) || item.current.gte(0)) continue;
-          const need = nextLevelNeed(idx);
-          if (need === null) continue;
-          if (need === 0) { if (levelUp(idx)) { ctx.did(); bought.push(`${idx}↑`); } continue; }
-          p.shopIndex = idx;
-          setBulk("shopInput", need);
-          if (!afford(item.cost)) continue;
+          const short = shortfall(idx);
+          if (short === null) continue;
+          // Po awansie ma zostać co najmniej `buffer` XP na fragmentacje.
+          const buffer = ctx.p.fragBuffer ? fragmentationBuffer(idx) : 0;
+          const need = Math.max(0, short + buffer);
+          const base = shopBase(name, j);
+          cands.push({ idx, need, cost: need ? petCost(base, need) : 0 });
+        }
+        cands.sort((a, b) => a.cost - b.cost);
+        for (const c of cands) {
+          if (c.need === 0) { if (levelUp(c.idx)) { ctx.did(); bought.push(`${c.idx}↑`); } continue; }
+          if (c.cost > ctx.p.maxCost || pp() - c.cost < reserve) continue;
+          p.shopIndex = c.idx;
+          setBulk("shopInput", c.need);
           if (ctx.click("pet", 1002, { refresh: true })) {
             ctx.did();
-            levelUp(idx);
-            bought.push(`${idx}×${need}`);
+            levelUp(c.idx);
+            bought.push(`${c.idx}×${c.need}`);
           }
         }
       }
     });
     if (bought.length) ctx.status("kupiono: " + bought.join(", "));
+    else if (reserve > ctx.p.reserve) ctx.status(`odkładam PP na Paragon Shardy (do ${Math.round(reserve).toLocaleString()} PP)`);
   },
 };
 
