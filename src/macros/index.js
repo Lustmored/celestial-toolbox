@@ -4,6 +4,7 @@ import { cbClaimAll, dotKnight, fragmentation, singularityPets } from "./checkba
 import { moonstone, repliGrass } from "./grids.js";
 import { hexVexes } from "./hex.js";
 import { casinoKiller, smaAutoEnter } from "./darkness.js";
+import { coreFragmentFarm } from "./corefrags.js";
 import { spaceDust } from "./space.js";
 import { petShop, fragmentShop } from "./shops.js";
 import { rocketPassengers, rocketMaker } from "./rocket.js";
@@ -13,7 +14,7 @@ export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
   moonstone, repliGrass,
   hexVexes,
-  casinoKiller, smaAutoEnter,
+  casinoKiller, smaAutoEnter, coreFragmentFarm,
   spaceDust,
   rocketPassengers, rocketMaker,
   bhSkillButtons,

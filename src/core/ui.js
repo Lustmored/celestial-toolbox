@@ -43,7 +43,7 @@ details.group[open] > summary::before { content: "▾ "; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #4a4c5a; flex: none; }
 .dot.on { background: #3fcf6a; } .dot.waiting { background: #d9b23a; }
 .dot.paused { background: #6a8bd9; } .dot.error { background: #e0504a; }
-input[type=number], input[type=text] { font: inherit; color: inherit; background: #0f1015; border: 1px solid #3a3c4a;
+input[type=number], input[type=text], select { font: inherit; color: inherit; background: #0f1015; border: 1px solid #3a3c4a;
   border-radius: 3px; padding: 1px 4px; }
 input.every { width: 52px; text-align: right; }
 .unit { color: #888a99; }
@@ -84,6 +84,16 @@ function paramInput(macro, p, s) {
     const input = h("input", { type: "checkbox", onchange: e => set(e.target.checked) });
     input.checked = Boolean(s.params[p.key]);
     return h("label", { class: "param" }, input, h("span", {}, p.label));
+  }
+  if (p.type === "select") {
+    const sel = h("select", { onchange: e => set(e.target.value) });
+    for (const [value, label] of p.options) {
+      const o = h("option", {}, label);
+      o.value = value;
+      sel.appendChild(o);
+    }
+    sel.value = String(s.params[p.key]);
+    return h("label", { class: "param wide" }, h("span", {}, p.label), sel);
   }
   const input = h("input", {
     type: p.type === "number" ? "number" : "text",
