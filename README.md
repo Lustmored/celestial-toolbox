@@ -51,6 +51,8 @@ export const mojeMakro = {
 };
 ```
 
+Przełącznik bez pętli (np. zmiana wyglądu): zamiast `every` i `run` daj `toggle: true` oraz `onEnable`/`onDisable`.
+
 Helpery w `ctx`: `click(layer, id, {refresh})`, `canClick`, `buyOne`, `layerActive`, `D()`, `parseIds("13 22 11")`.
 `refresh: true` przelicza `tmp` przed kliknięciem. Jest potrzebne, gdy makro zmieniło stan, od którego zależy `canClick` (np. `bannerIndex`).
 

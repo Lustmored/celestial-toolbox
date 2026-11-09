@@ -95,6 +95,7 @@ export function tick() {
       if (rt.state !== "error") rt.state = "off";
       continue;
     }
+    if (macro.toggle) { rt.state = "on"; continue; } // przełączniki nie mają pętli
     if (paused) { rt.state = "paused"; continue; }
     if (!availability(macro)) { rt.state = "waiting"; continue; }
     rt.state = "on";

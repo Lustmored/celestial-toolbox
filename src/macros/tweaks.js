@@ -34,12 +34,11 @@ export const bhSkillButtons = {
   id: "tweak-bh-skill-buttons",
   name: "BH: wyraźne przyciski skilli",
   group: "Wygląd",
-  every: 10,
+  toggle: true, // bez pętli: tylko włącz/wyłącz
   description:
     "W Black Heart wyróżnia na zielono aktywne przyciski „Increase Level Cap” oraz zwiększania/zmniejszania poziomu " +
     "umiejętności, a nieaktywne przyciemnia. Tylko wygląd, bez wpływu na grę.",
   available: () => Boolean(window.layers.bh?.clickables),
   onEnable() { patch(); },
   onDisable() { unpatch(); },
-  run() { patch(); },
 };
