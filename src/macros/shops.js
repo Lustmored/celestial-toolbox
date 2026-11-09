@@ -119,15 +119,17 @@ export const petShop = {
   group: "Check Back",
   every: 5,
   description:
-    "Zarządza wydawaniem PP. 1) Paragon Shardy: gdy gotowe, największy bulk (min–max) za najwyżej podany % PP; dopóki nie stać na minimum, " +
-    "odkłada PP. 2) Pety z Pet Shopu (tyle, ile brakuje do awansu + zapas XP pod Fragmentation, najtańsze awanse najpierw) " +
+    "Zarządza wydawaniem PP. 1) Paragon Shardy: na kilka godzin przed odświeżeniem sklepu odkłada PP na docelowy bulk, " +
+    "a po odświeżeniu kupuje największy bulk (min–max), na jaki stać (do celu albo do podanego % PP, jeśli to więcej). 2) Pety z Pet Shopu (tyle, ile brakuje do awansu + zapas XP pod Fragmentation, najtańsze awanse najpierw) " +
     "i Button Enhancement (najtańsze poziomy najpierw) dzielą resztę wg docelowego udziału w wydatkach z ostatnich dni; " +
     "gdy jedna strona nie ma nic do kupienia, druga wydaje dalej.",
   params: [
     { key: "order", label: "Kolejność grup petów", type: "text", default: "rare uncommon common" },
     { key: "beShare", label: "Button Enhancement: docelowy % wydatków (0 = nie kupuj)", type: "number", default: 25, min: 0, max: 100, step: 5 },
     { key: "beEsc", label: "Button Enhancement: kupuj też ESC (szansa na Evo Shardy)", type: "bool", default: false },
-    { key: "paragonPct", label: "Paragon Shardy: maks. % obecnych PP (0 = nie kupuj)", type: "number", default: 40, min: 0, max: 100, step: 5 },
+    { key: "paragonPct", label: "Paragon Shardy: maks. % obecnych PP ponad cel (0 = nie kupuj)", type: "number", default: 40, min: 0, max: 100, step: 5 },
+    { key: "paragonTarget", label: "Paragon Shardy: docelowy bulk (na niego odkładamy PP)", type: "number", default: 20, min: 1, step: 1 },
+    { key: "paragonSaveHours", label: "Paragon Shardy: zacznij odkładać PP (h przed odświeżeniem)", type: "number", default: 8, min: 0, step: 1 },
     { key: "paragonMin", label: "Paragon Shardy: minimalny bulk", type: "number", default: 5, min: 1, step: 1 },
     { key: "paragonMax", label: "Paragon Shardy: maksymalny bulk", type: "number", default: 20, min: 1, step: 1 },
     { key: "fragBuffer", label: "Zapas XP pod Fragmentation dla petów z bannerów", type: "bool", default: true },
@@ -152,9 +154,14 @@ export const petShop = {
 
     withRestore(["shopIndex", "shopInput"], () => {
       // --- 1. Paragon Shardy (Misc.) ---
+      // Na `paragonSaveHours` przed odświeżeniem sklepu odkładamy PP na docelowy bulk; pety wydają tylko nadwyżkę.
       const psBase = shopBase("shard", 1);
-      if (ctx.p.paragonPct > 0 && tabVisible("shopTabs", "Misc.") && clickVisible(shopSel[2]) && p.shop.shard[1].current.lt(0)) {
-        const budget = Math.min(pp() * ctx.p.paragonPct / 100, pp() - ctx.p.reserve);
+      const psItem = p.shop.shard[1];
+      const psVisible = ctx.p.paragonPct > 0 && tabVisible("shopTabs", "Misc.") && clickVisible(shopSel[2]);
+      const targetCost = shardCost(psBase, Math.max(ctx.p.paragonMin, ctx.p.paragonTarget));
+      if (psVisible && psItem.current.lt(0)) {
+        // Gotowe — kupujemy do celu (albo więcej, jeśli % PP na to pozwala).
+        const budget = Math.min(Math.max(pp() * ctx.p.paragonPct / 100, targetCost), pp() - ctx.p.reserve);
         let bulk = 0;
         for (let b = ctx.p.paragonMax; b >= ctx.p.paragonMin; b--) if (shardCost(psBase, b) <= budget) { bulk = b; break; }
         if (bulk) {
@@ -162,8 +169,10 @@ export const petShop = {
           setBulk("shopInput", bulk);
           if (ctx.click("pet", 1003, { refresh: true })) { ctx.did(); bought.push(`${bulk} PS`); }
         } else {
-          reserve = Math.max(reserve, shardCost(psBase, ctx.p.paragonMin) * 100 / ctx.p.paragonPct);
+          reserve = Math.max(reserve, shardCost(psBase, ctx.p.paragonMin) + ctx.p.reserve);
         }
+      } else if (psVisible && Number(psItem.current) <= ctx.p.paragonSaveHours * 3600) {
+        reserve = Math.max(reserve, targetCost + ctx.p.reserve);
       }
 
       // --- 2. Kandydaci: pety ---
@@ -235,6 +244,7 @@ export const petShop = {
     const share = st.pets + st.be > 0 ? Math.round(100 * st.be / (st.pets + st.be)) : 0;
     if (bought.length) ctx.status(`kupiono: ${bought.join(", ")} · BE ${share}% wydatków`);
     else if (reserve > ctx.p.reserve) ctx.status(`odkładam PP na Paragon Shardy (do ${Math.round(reserve).toLocaleString()} PP)`);
+    if (reserve > ctx.p.reserve && bought.length) ctx.status(`kupiono: ${bought.join(", ")} · odkładam PP na Paragon Shardy (do ${Math.round(reserve).toLocaleString()} PP)`);
   },
 };
 
