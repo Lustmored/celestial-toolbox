@@ -5,9 +5,10 @@ import { moonstone, repliGrass } from "./grids.js";
 import { hexVexes } from "./hex.js";
 import { casinoKiller, smaAutoEnter } from "./darkness.js";
 import { spaceDust } from "./space.js";
+import { petShop, fragmentShop } from "./shops.js";
 
 export default [
-  cbClaimAll, dotKnight, fragmentation, singularityPets,
+  cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
   moonstone, repliGrass,
   hexVexes,
   casinoKiller, smaAutoEnter,

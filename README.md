@@ -28,7 +28,7 @@ Bez wtyczki: na tej samej stronie jest bookmarklet.
 
 ## Makra
 
-CB Claim All, Dot Knight, Fragmentation, Singularity Pets, Moonstone Killer, Repli-Grass, Hex of Vexes, Casino Killer, SMA Auto-enter, Space Dust.
+CB Claim All, Dot Knight, Fragmentation, Singularity Pets, Pet Shop, Fragment Shop, Moonstone Killer, Repli-Grass, Hex of Vexes, Casino Killer, SMA Auto-enter, Space Dust.
 Singularity Pets i Space Dust używają wspólnej reguły „zapełniło się → wydaj” (`src/macros/lib/spendWhenFull.js`).
 
 ## Dodanie makra
