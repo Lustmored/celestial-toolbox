@@ -29,6 +29,9 @@ function makeCtx(macro, rt) {
     log: (...a) => log(macro, ...a),
     status: msg => { rt.status = String(msg); },
     did: (n = 1) => { rt.actions += n; },
+    // Trwały stan makra (zapisywany razem z ustawieniami), np. liczniki wydatków.
+    state: (s.state ??= {}),
+    persist: save,
   };
 }
 

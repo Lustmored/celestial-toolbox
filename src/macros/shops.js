@@ -108,24 +108,31 @@ function fragmentationBuffer(pid) {
   return extra;
 }
 
+// Button Enhancement: id = 100*grupa + 10*przycisk + typ (1 XP/CRC, 2 cooldown, 3 XP/s, 4 ESC).
+const beType = id => Number(id) % 10;
+
+const HALF_LIFE_H = 24; // wydatki sprzed doby liczą się w połowie
+
 export const petShop = {
   id: "pet-shop",
-  name: "Pet Shop",
+  name: "Pet Points (sklep + Button Enh.)",
   group: "Check Back",
   every: 5,
   description:
-    "Paragon Shardy: gdy są gotowe, kupuje największy bulk (w granicach min–max), który kosztuje najwyżej podany % obecnych PP; " +
-    "dopóki nie stać go na minimum, pety nie wydają PP poniżej progu potrzebnego na ten zakup. " +
-    "Pety: w każdej grupie zaczyna od tych, którym awans wychodzi najtaniej; kupuje tyle, ile brakuje do następnego poziomu " +
-    "(plus zapas XP pod Fragmentation dla petów z bannerów) i od razu awansuje. Twój bulk i wybrana pozycja są przywracane.",
+    "Zarządza wydawaniem PP. 1) Paragon Shardy: gdy gotowe, największy bulk (min–max) za najwyżej podany % PP; dopóki nie stać na minimum, " +
+    "odkłada PP. 2) Pety z Pet Shopu (tyle, ile brakuje do awansu + zapas XP pod Fragmentation, najtańsze awanse najpierw) " +
+    "i Button Enhancement (najtańsze poziomy najpierw) dzielą resztę wg docelowego udziału w wydatkach z ostatnich dni; " +
+    "gdy jedna strona nie ma nic do kupienia, druga wydaje dalej.",
   params: [
-    { key: "order", label: "Kolejność grup", type: "text", default: "rare uncommon common" },
+    { key: "order", label: "Kolejność grup petów", type: "text", default: "rare uncommon common" },
+    { key: "beShare", label: "Button Enhancement: docelowy % wydatków (0 = nie kupuj)", type: "number", default: 25, min: 0, max: 100, step: 5 },
+    { key: "beEsc", label: "Button Enhancement: kupuj też ESC (szansa na Evo Shardy)", type: "bool", default: false },
     { key: "paragonPct", label: "Paragon Shardy: maks. % obecnych PP (0 = nie kupuj)", type: "number", default: 40, min: 0, max: 100, step: 5 },
     { key: "paragonMin", label: "Paragon Shardy: minimalny bulk", type: "number", default: 5, min: 1, step: 1 },
     { key: "paragonMax", label: "Paragon Shardy: maksymalny bulk", type: "number", default: 20, min: 1, step: 1 },
     { key: "fragBuffer", label: "Zapas XP pod Fragmentation dla petów z bannerów", type: "bool", default: true },
-    { key: "reserve", label: "Zostaw co najmniej PP", type: "number", default: 0, min: 0, step: 1000 },
-    { key: "maxCost", label: "Maks. koszt jednego zakupu peta (PP)", type: "number", default: 100000, min: 0, step: 1000 },
+    { key: "reserve", label: "Zostaw co najmniej PP (np. na ewolucję)", type: "number", default: 0, min: 0, step: 1000 },
+    { key: "maxCost", label: "Maks. koszt jednego zakupu (PP)", type: "number", default: 100000, min: 0, step: 1000 },
   ],
   available: g => g.layerActive("pet") && tabVisible("content", "Pet Shop"),
   run(ctx) {
@@ -134,8 +141,17 @@ export const petShop = {
     const pp = () => Number(window.player.cb.petPoints);
     const bought = [];
     let reserve = ctx.p.reserve;
+
+    // Liczniki wydatków z wygaszaniem.
+    const st = ctx.state;
+    const now = Date.now();
+    const decay = Math.pow(0.5, Math.max(0, now - (st.t ?? now)) / 3600e3 / HALF_LIFE_H);
+    st.pets = (st.pets ?? 0) * decay;
+    st.be = (st.be ?? 0) * decay;
+    st.t = now;
+
     withRestore(["shopIndex", "shopInput"], () => {
-      // --- Paragon Shardy (Misc.) ---
+      // --- 1. Paragon Shardy (Misc.) ---
       const psBase = shopBase("shard", 1);
       if (ctx.p.paragonPct > 0 && tabVisible("shopTabs", "Misc.") && clickVisible(shopSel[2]) && p.shop.shard[1].current.lt(0)) {
         const budget = Math.min(pp() * ctx.p.paragonPct / 100, pp() - ctx.p.reserve);
@@ -146,11 +162,12 @@ export const petShop = {
           setBulk("shopInput", bulk);
           if (ctx.click("pet", 1003, { refresh: true })) { ctx.did(); bought.push(`${bulk} PS`); }
         } else {
-          // Odkładamy PP, aż minimalny zakup zmieści się w limicie %.
           reserve = Math.max(reserve, shardCost(psBase, ctx.p.paragonMin) * 100 / ctx.p.paragonPct);
         }
       }
-      // --- Pety: w każdej grupie najpierw najtańsze awanse ---
+
+      // --- 2. Kandydaci: pety ---
+      const petQueue = [];
       for (const name of String(ctx.p.order).split(/\s+/).filter(Boolean)) {
         const g = GROUPS[name];
         if (!g || !tabVisible("shopTabs", g.tab)) continue;
@@ -161,27 +178,62 @@ export const petShop = {
           if (!item || !clickVisible(shopSel[idx]) || item.current.gte(0)) continue;
           const short = shortfall(idx);
           if (short === null) continue;
-          // Po awansie ma zostać co najmniej `buffer` XP na fragmentacje.
           const buffer = ctx.p.fragBuffer ? fragmentationBuffer(idx) : 0;
           const need = Math.max(0, short + buffer);
-          const base = shopBase(name, j);
-          cands.push({ idx, need, cost: need ? petCost(base, need) : 0 });
+          cands.push({ idx, need, cost: need ? petCost(shopBase(name, j), need) : 0 });
         }
         cands.sort((a, b) => a.cost - b.cost);
-        for (const c of cands) {
-          if (c.need === 0) { if (levelUp(c.idx)) { ctx.did(); bought.push(`${c.idx}↑`); } continue; }
-          if (c.cost > ctx.p.maxCost || pp() - c.cost < reserve) continue;
-          p.shopIndex = c.idx;
-          setBulk("shopInput", c.need);
+        petQueue.push(...cands);
+      }
+      // Darmowe awanse (XP już jest) od razu.
+      for (const c of petQueue.filter(c => c.need === 0)) if (levelUp(c.idx)) { ctx.did(); bought.push(`${c.idx}↑`); }
+      const pets = petQueue.filter(c => c.need > 0);
+
+      const beOn = ctx.p.beShare > 0 && window.player.ev1 && !window.tmp.ev1?.deactivated;
+      const nextBe = () => {
+        if (!beOn) return null;
+        let best = null;
+        for (const id in window.layers.ev1.buyables) {
+          if (isNaN(id)) continue;
+          const t = window.tmp.ev1.buyables[id];
+          if (!t?.unlocked || !t.canBuy) continue;
+          if (!ctx.p.beEsc && Number(id) < 200 && beType(id) === 4) continue;
+          const cost = Number(t.cost);
+          if (!best || cost < best.cost) best = { id, cost };
+        }
+        return best;
+      };
+      const ok = cost => cost <= ctx.p.maxCost && pp() - cost >= reserve;
+
+      // --- 3. Naprzemiennie wg udziału w wydatkach ---
+      for (let guard = 0; guard < 200; guard++) {
+        const pet0 = pets.find(c => ok(c.cost));
+        const be0 = nextBe();
+        const beOk = be0 && ok(be0.cost);
+        if (!pet0 && !beOk) break;
+        const total = st.pets + st.be;
+        const beBehind = total === 0 ? ctx.p.beShare > 0 : st.be / total < ctx.p.beShare / 100;
+        if (beOk && (beBehind || !pet0)) {
+          const before = pp();
+          ctx.buyOne("ev1", be0.id);
+          const spent = before - pp();
+          if (spent <= 0) break;
+          st.be += spent; ctx.did(); bought.push(`BE ${be0.id}`);
+        } else {
+          pets.splice(pets.indexOf(pet0), 1);
+          p.shopIndex = pet0.idx;
+          setBulk("shopInput", pet0.need);
+          const before = pp();
           if (ctx.click("pet", 1002, { refresh: true })) {
-            ctx.did();
-            levelUp(c.idx);
-            bought.push(`${c.idx}×${c.need}`);
+            st.pets += before - pp(); ctx.did(); levelUp(pet0.idx);
+            bought.push(`${pet0.idx}×${pet0.need}`);
           }
         }
       }
     });
-    if (bought.length) ctx.status("kupiono: " + bought.join(", "));
+    ctx.persist();
+    const share = st.pets + st.be > 0 ? Math.round(100 * st.be / (st.pets + st.be)) : 0;
+    if (bought.length) ctx.status(`kupiono: ${bought.join(", ")} · BE ${share}% wydatków`);
     else if (reserve > ctx.p.reserve) ctx.status(`odkładam PP na Paragon Shardy (do ${Math.round(reserve).toLocaleString()} PP)`);
   },
 };
