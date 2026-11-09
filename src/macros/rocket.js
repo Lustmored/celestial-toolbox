@@ -133,3 +133,34 @@ export const rocketPassengers = {
     ctx.status(label);
   },
 };
+
+export const rocketMaker = {
+  id: "rocket-maker",
+  name: "Fuel & Parts",
+  group: "Rockets (U2)",
+  every: 0,
+  description:
+    "Na zmianę klika „Make Activated Fuel” i „Make Rocket Parts” (jedno kliknięcie na tick gry, jak trzymanie Entera), " +
+    "dopóki go nie wyłączysz. Każde kliknięcie robi singularity, tak jak ręcznie. Bez upgrade'u gwiazd " +
+    "„SMA i Moonstone niepotrzebne do części” nie klika części, bo zerowałoby to SMA.",
+  params: [
+    { key: "partsWithout203", label: "Klikaj części także bez upgrade'u za 333k (zeruje SMA)", type: "bool", default: false },
+  ],
+  available: g => g.layerActive("ro"),
+  run(ctx) {
+    const st = ctx.state;
+    const partsOk = ctx.p.partsWithout203 || window.player.st.buyables[203].gte(1);
+    // Na zmianę, żeby drugie kliknięcie w tym samym ticku nie korzystało z wartości sprzed resetu.
+    const order = st.next === "parts" && partsOk ? [12, 11] : partsOk ? [11, 12] : [11];
+    for (const id of order) {
+      if (ctx.click("ro", id, { refresh: true })) {
+        ctx.did();
+        st.next = id === 11 ? "parts" : "fuel";
+        break;
+      }
+    }
+    const ro = window.player.ro;
+    ctx.status(`paliwo ${window.format(ro.activatedFuel)} · części ${window.format(ro.rocketParts)} · gwiazdy za start ${window.format(window.player.au2.starsToGet)}` +
+      (partsOk ? "" : " · części wyłączone (brak upgrade'u 333k)"));
+  },
+};
