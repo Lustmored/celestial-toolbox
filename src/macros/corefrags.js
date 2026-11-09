@@ -1,80 +1,96 @@
-// Ustawia halter i Auto Singularity (tryb czasowy) pod wybrany typ core fragmentu.
-// Makro niczego nie kupuje i nie resetuje – tylko konfiguruje to, co gra już daje,
-// pokazuje na żywo, który typ prowadzi, a po wyłączeniu zdejmuje wszystkie haltery.
+// Farma core fragmentów: ustawia halter, pauzę uniwersów (część Haltera) i Auto Singularity
+// pod wybrany typ CF. W trybie adaptacyjnym makro włącza licznik Auto Singularity tylko wtedy,
+// gdy wybrany typ prowadzi – reset trafia w okno, w którym ten typ wygrywa, więc nie trzeba
+// dobierać interwału, a zmiany w progresie nie psują ustawień.
+// Makro niczego nie kupuje i niczego nie dodaje – steruje tylko tym, co gra już daje.
 
 const NAMES = ["Ancient", "Natural", "Technological", "Paradox", "Radioactive", "Cosmic", "Temporal"];
 const HALTERS = ["points", "factor", "prestige", "trees", "grass", "goldenGrass", "grasshoppers",
   "code", "mods", "xp", "antimatter", "infinities", "ip", "nip"];
 
-// Presety zmierzone symulacją na Twoim save (120 s na wariant).
-// cap = halter w trybie 2 („limit") z wartością 1, czyli praktycznie zatrzymany przyrost.
+// pause: uniwersa zatrzymane na czas farmy (po odpauzowaniu gra nadrabia czas pauzy).
+// cap: halter w trybie limitu = 1. interval: dla trybu nieadaptacyjnego.
+// Zmierzone na Twoim save (PP 5e5, 3–4 min na wariant).
 const PRESETS = {
-  6: { interval: 1, cap: [], lowPP: false, note: "~+200 Temporal / 2 min" },
-  3: { interval: 10, cap: ["antimatter"], lowPP: false, note: "~+60 Paradox / 2 min" },
-  4: { interval: 3, cap: ["factor", "nip", "antimatter"], lowPP: true, note: "~+140 Radioactive / 2 min przy niskim PP" },
-  5: { interval: 30, cap: [], lowPP: true, note: "~+25 Cosmic / 2 min przy niskim PP" },
-  0: { interval: 10, cap: ["antimatter", "nip"], lowPP: true, note: "teraz przegrywa z Radioactive" },
-  1: { interval: 15, cap: ["factor", "nip", "antimatter", "code"], lowPP: true, note: "teraz przegrywa z Radioactive" },
-  2: { interval: 15, cap: ["factor", "nip", "antimatter"], lowPP: true, note: "teraz przegrywa z Radioactive" },
+  6: { pause: [], cap: [], interval: 0.15, always: true, note: "wymaga wysokiego PP" },
+  3: { pause: [], cap: ["antimatter"], interval: 1, note: "" },
+  0: { pause: ["U2"], cap: [], interval: 10, note: "pauza U2" },
+  5: { pause: ["U1"], cap: [], interval: 30, note: "pauza U1" },
+  4: { pause: ["U1", "U2"], cap: [], interval: 3, note: "pauza U1+U2, wymaga PP < ~1e5" },
+  1: { pause: ["U2"], cap: ["factor"], interval: 15, note: "teraz przegrywa z Radioactive" },
+  2: { pause: ["U2"], cap: ["factor"], interval: 15, note: "teraz przegrywa z Radioactive" },
 };
 
 const dec = v => new window.Decimal(v);
+const P = () => window.player;
 
 function snapshot() {
   const h = {};
   for (const k of HALTERS) {
-    const e = window.player.po.halter[k];
+    const e = P().po.halter[k];
     if (e) h[k] = { enabled: e.enabled, halt: String(e.halt) };
   }
-  const s = window.player.sma;
-  return { halter: h, sma: { toggle: s.toggle, type: s.type, input: String(s.input), amount: String(s.amount) } };
+  const s = P().sma;
+  return { halter: h, sma: { toggle: s.toggle, type: s.type, amount: String(s.amount) } };
 }
 
 function allHaltersOff() {
-  for (const k of HALTERS) { const e = window.player.po.halter[k]; if (e) e.enabled = 0; }
+  for (const k of HALTERS) { const e = P().po.halter[k]; if (e) e.enabled = 0; }
 }
 
-function apply(target, interval, autoOn) {
+function setPaused(list, state) {
+  for (const u of list) {
+    if (!P().uni?.[u]) continue;
+    const paused = Boolean(P().uni[u].paused);
+    if (state && !paused) window.pauseUniverse(u, "pause");
+    if (!state && paused) window.pauseUniverse(u, "unpause");
+  }
+}
+
+function applyPreset(ctx, target, interval) {
   const preset = PRESETS[target];
+  // Odpauzuj to, co sami wcześniej zapauzowaliśmy, a czego nowy preset nie chce.
+  const ours = ctx.state.paused ?? [];
+  setPaused(ours.filter(u => !preset.pause.includes(u)), false);
+  const newly = preset.pause.filter(u => P().uni?.[u] && !P().uni[u].paused);
+  setPaused(newly, true);
+  ctx.state.paused = [...new Set([...ours.filter(u => preset.pause.includes(u)), ...newly])];
+
   allHaltersOff();
   for (const k of preset.cap) {
-    const e = window.player.po.halter[k];
+    const e = P().po.halter[k];
     if (e) { e.enabled = 2; e.halt = dec(1); }
   }
-  const s = window.player.sma;
+  const s = P().sma;
   s.type = true;
   s.input = dec(interval);
   s.amount = dec(interval);
   s.time = dec(0);
-  if (autoOn) s.toggle = true;
 }
 
-function restore(snap) {
-  for (const [k, v] of Object.entries(snap.halter)) {
-    const e = window.player.po.halter[k];
-    if (e) { e.enabled = v.enabled; e.halt = dec(v.halt); }
-  }
-  const s = window.player.sma;
-  s.toggle = snap.sma.toggle; s.type = snap.sma.type;
-  s.input = dec(snap.sma.input); s.amount = dec(snap.sma.amount);
+function resetCount() {
+  return String(P().s.singularities);
 }
 
 export const coreFragmentFarm = {
   id: "core-fragment-farm",
   name: "Farma core fragmentów",
   group: "Darkness / SMA",
-  description: "Wybierz typ CF – makro ustawia halter i Auto Singularity (tryb czasowy) z presetu. "
-    + "Potem tylko włącz Auto Singularity w grze. Wyłączenie makra zdejmuje wszystkie haltery "
-    + "i wyłącza Auto Singularity (albo przywraca stan sprzed włączenia).",
-  every: 1,
+  description: "Wybierz typ CF i włącz. Makro ustawia halter, pauzę uniwersów i Auto Singularity. "
+    + "Tryb adaptacyjny: licznik Auto Singularity chodzi tylko, gdy wybrany typ prowadzi "
+    + "(z resetem awaryjnym, gdy utknie). Wyłączenie zdejmuje haltery, odpauzowuje uniwersa "
+    + "i wyłącza Auto Singularity.",
+  every: 0,
   params: [
     { key: "target", label: "Typ CF", type: "select", default: "6",
-      options: [6, 3, 4, 5, 0, 1, 2].map(i => [String(i), `${NAMES[i]} – ${PRESETS[i].note}`]) },
-    { key: "interval", label: "Interwał Auto Singularity (s, 0 = z presetu)", type: "number", default: 0, min: 0 },
-    { key: "autoOn", label: "Od razu włącz Auto Singularity", type: "bool", default: false },
-    { key: "restorePrevious", label: "Po wyłączeniu przywróć poprzednie ustawienia (zamiast zdjąć wszystko)", type: "bool", default: false },
+      options: [6, 3, 0, 5, 4, 1, 2].map(i => [String(i), NAMES[i] + (PRESETS[i].note ? ` (${PRESETS[i].note})` : "")]) },
+    { key: "adaptive", label: "Adaptacyjnie (reset tylko, gdy cel prowadzi)", type: "bool", default: true },
+    { key: "fastInterval", label: "Interwał w trybie adaptacyjnym (s)", type: "number", default: 0.15, min: 0.05 },
+    { key: "stuckReset", label: "Reset awaryjny po tylu s bez okna (0 = nigdy)", type: "number", default: 30, min: 0 },
+    { key: "restorePrevious", label: "Po wyłączeniu przywróć poprzednie haltery i AS", type: "bool", default: false },
   ],
-  available: () => Boolean(window.player?.po?.halter && window.player?.sma && window.player?.cof),
+  available: () => Boolean(window.player?.po?.halter && window.player?.sma && window.player?.cof
+    && typeof window.pauseUniverse === "function"),
 
   onEnable(ctx) {
     if (!this.available()) return;
@@ -85,36 +101,66 @@ export const coreFragmentFarm = {
 
   onDisable(ctx) {
     if (!this.available()) return;
-    if (ctx.p.restorePrevious && ctx.state.snap) restore(ctx.state.snap);
-    else { allHaltersOff(); window.player.sma.toggle = false; }
+    setPaused(ctx.state.paused ?? [], false);
+    if (ctx.p.restorePrevious && ctx.state.snap) {
+      for (const [k, v] of Object.entries(ctx.state.snap.halter)) {
+        const e = P().po.halter[k];
+        if (e) { e.enabled = v.enabled; e.halt = dec(v.halt); }
+      }
+      const s = P().sma, o = ctx.state.snap.sma;
+      s.toggle = o.toggle; s.type = o.type; s.input = dec(o.amount); s.amount = dec(o.amount);
+    } else {
+      allHaltersOff();
+      P().sma.toggle = false;
+    }
     ctx.state.snap = null;
+    ctx.state.paused = [];
     ctx.state.applied = null;
     ctx.persist();
-    ctx.log("Haltery zdjęte, Auto Singularity " + (ctx.p.restorePrevious ? "przywrócone" : "wyłączone"));
   },
 
   run(ctx) {
     const target = Number(ctx.p.target);
     const preset = PRESETS[target];
     if (!preset) { ctx.status("Nieznany typ CF"); return; }
-    const interval = Number(ctx.p.interval) > 0 ? Number(ctx.p.interval) : preset.interval;
+    const adaptive = Boolean(ctx.p.adaptive);
+    const interval = adaptive && !preset.always ? Math.max(0.05, Number(ctx.p.fastInterval) || 0.15) : preset.interval;
     const key = `${target}|${interval}`;
+    const rt = (ctx.state.rt ??= {});
     if (ctx.state.applied !== key) {
       ctx.state.snap ??= snapshot();
-      apply(target, interval, ctx.p.autoOn);
+      applyPreset(ctx, target, interval);
       ctx.state.applied = key;
       ctx.persist();
-      ctx.did(); ctx.log(`Preset ${NAMES[target]} (${interval} s)`);
+      Object.assign(rt, { lastReset: Date.now(), count: resetCount(), gained: 0, start: Date.now(),
+        cf: String(P().cof.coreFragments[target]) });
+      ctx.did();
     }
 
-    const cof = window.player.cof;
+    const cof = P().cof;
     const lead = cof.highestScore;
-    const score = i => window.format ? window.format(cof.fragmentScore[i]) : String(cof.fragmentScore[i]);
-    const auto = window.player.sma.toggle ? "AS on" : "AS off";
-    const parts = [`${auto}`, `cel ${NAMES[target]} ${score(target)}`];
-    if (lead === target) parts.push("✓ prowadzi");
-    else parts.push(`✗ prowadzi ${NAMES[lead]} ${score(lead)}`);
-    if (preset.lowPP && lead === 6) parts.push("(Temporal wygrywa – wydaj PP)");
+    const leading = lead === target && cof.coreFragmentsToGet[target].gte(1);
+
+    const c = resetCount();
+    if (c !== rt.count) { rt.count = c; rt.lastReset = Date.now(); }
+
+    let mode;
+    if (!adaptive || preset.always) {
+      // Temporal się nie resetuje, więc częste resety tylko zbijają konkurencję.
+      P().sma.toggle = true;
+      mode = `stały ${interval} s`;
+    } else {
+      const stuck = Number(ctx.p.stuckReset) > 0 && Date.now() - rt.lastReset > Number(ctx.p.stuckReset) * 1000;
+      P().sma.toggle = leading || stuck;
+      mode = leading ? "okno ✓" : stuck ? "reset awaryjny" : "czekam na okno";
+    }
+
+    const fmt = v => (window.format ? window.format(v) : String(v));
+    const got = dec(cof.coreFragments[target]).sub(dec(rt.cf ?? 0));
+    const mins = Math.max(1 / 60, (Date.now() - (rt.start ?? Date.now())) / 60000);
+    const parts = [mode, `${NAMES[target]} ${fmt(cof.fragmentScore[target])}`];
+    if (lead !== target) parts.push(`prowadzi ${NAMES[lead]} ${fmt(cof.fragmentScore[lead])}`);
+    parts.push(`+${fmt(got)} (${fmt(got.div(mins))}/min)`);
     ctx.status(parts.join(" · "));
   },
 };
