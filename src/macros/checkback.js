@@ -8,11 +8,14 @@ export const cbClaimAll = {
   group: "Check Back",
   every: 1,
   description:
-    "Klika trzy przyciski Claim All w Check Back (XP, skrzynki, Pet Points) oraz gotowe przyciski Dragona " +
+    "Klika trzy przyciski Claim All w Check Back (XP, skrzynki, Pet Points), dwa Claim All u Marcela (Evo i Paragon Shards) " +
+    "oraz gotowe przyciski Dragona " +
     "(tylko te, które gra Ci pokazuje).",
   available: g => g.layerActive("cb"),
   run(ctx) {
     for (const id of [99, 199, 299]) if (ctx.click("cb", id)) ctx.did();
+    // Marcel (ev8): Claim All dla Evo Shardów i Paragon Shardów.
+    for (const id of [99, 199]) if (ctx.click("ev8", id)) ctx.did();
     // Dragon: przyciski 1–3 (złoto) i 4–6; ctx.click pomija ukryte i nieodblokowane.
     for (let id = 1; id <= 6; id++) if (ctx.click("ep1", id)) ctx.did();
   },
