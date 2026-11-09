@@ -7,7 +7,6 @@ import { casinoKiller, smaAutoEnter } from "./darkness.js";
 import { spaceDust } from "./space.js";
 import { petShop, fragmentShop } from "./shops.js";
 import { rocketPassengers, rocketMaker } from "./rocket.js";
-import { bhAutoRestart } from "./bh.js";
 
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -16,5 +15,4 @@ export default [
   casinoKiller, smaAutoEnter,
   spaceDust,
   rocketPassengers, rocketMaker,
-  bhAutoRestart,
 ];
