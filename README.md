@@ -7,7 +7,7 @@ Panel po prawej stronie okna. Każde makro można włączyć, wyłączyć i skon
 
 1. Zainstaluj Violentmonkey (albo Tampermonkey).
 2. Otwórz `https://<user>.github.io/<repo>/` i kliknij link do `celestial-toolbox.user.js`.
-3. Od tej pory skrypt startuje sam i sam się aktualizuje po każdym pushu na `main`.
+3. Userscript to mały loader: przy każdym wejściu do gry pobiera aktualny toolbox z Pages, więc po pushu na `main` wystarczy odświeżyć stronę (Pages mogą mieć do kilku minut opóźnienia po deployu).
 
 Bez wtyczki: na tej samej stronie jest bookmarklet.
 
