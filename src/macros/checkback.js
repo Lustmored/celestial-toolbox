@@ -58,7 +58,12 @@ const SP_PETS = [
   { name: "Sel", key: "sel", base: 30 },
   { name: "Eclipse", key: "eclipse", base: 40 },
 ];
-const spUnlocked = pet => Boolean(window.tmp.sp.buyables[pet.base + 1]?.unlocked);
+// Pet jest „dostępny”, gdy jego zakładka jest widoczna w grze — nie kupujemy niczego w ukrytych sekcjach.
+const spUnlocked = pet => {
+  const tab = window.layers.sp.microtabs?.stuff?.[pet.name];
+  if (!tab) return false;
+  return tab.unlocked === undefined ? true : Boolean(window.run(tab.unlocked, tab));
+};
 
 export const singularityPets = {
   id: "singularity-pets",
