@@ -7,7 +7,7 @@ export const hexVexes = {
     "Kupuje kolejny brakujący upgrade Vex wg listy priorytetów. Gdy nie da się kupić, robi Vex reset, " +
     "dopóki łączna liczba Vexów jest poniżej limitu. Nie robi respeców.",
   params: [
-    { key: "priority", label: "Kolejność upgrade'ów", type: "text", default: "13 22 11 33 21 12 43 31 23 42 52 32 61 41 51 62 53 63" },
+    { key: "priority", label: "Kolejność upgrade'ów", type: "text", default: "13 22 11 33 21 12 43 31 23 41 53 32 63 42 51 61 52 62" },
     { key: "maxVex", label: "Vex reset do łącznie", type: "number", default: 18, min: 0, step: 1 },
     { key: "onlyInUA", label: "Tylko gdy patrzę na uniwersum α", type: "bool", default: true },
   ],
