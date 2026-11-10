@@ -11,6 +11,9 @@ const HALTERS = ["points", "factor", "prestige", "trees", "grass", "goldenGrass"
 // pause: uniwersa zatrzymane na czas farmy (po odpauzowaniu gra nadrabia czas pauzy).
 // cap: halter w trybie limitu = 1. interval: dla trybu nieadaptacyjnego.
 // Zmierzone na Twoim save (PP 5e5, 3–4 min na wariant).
+// Zmiana presetów → nowa wersja, żeby makro przełożyło je od razu, nawet gdy było już włączone.
+const PRESET_VERSION = 2;
+
 const PRESETS = {
   // sdOff: wyłącza produkcję Singularity Dimensions (moc SD = 0 → wynik Radioactive = 0).
   // xp w cap: halter XP z Check Back – zbija wynik Temporal, ale XP z przycisków CB leci wtedy ~0.
@@ -134,14 +137,15 @@ export const coreFragmentFarm = {
     if (!preset) { ctx.status("Nieznany typ CF"); return; }
     const adaptive = Boolean(ctx.p.adaptive);
     const interval = adaptive && !preset.always ? Math.max(0.05, Number(ctx.p.fastInterval) || 0.15) : preset.interval;
-    const key = `${target}|${interval}`;
+    const key = `${target}|${interval}|${PRESET_VERSION}`;
     const rt = (ctx.state.rt ??= {});
     if (ctx.state.applied !== key) {
       ctx.state.snap ??= snapshot();
       applyPreset(ctx, target, interval);
       ctx.state.applied = key;
       ctx.persist();
-      Object.assign(rt, { lastReset: Date.now(), count: resetCount(), gained: 0, start: Date.now(),
+      // lastReset = 0: pierwszy reset od razu, żeby zbić wyniki, które przed włączeniem były wysokie.
+      Object.assign(rt, { lastReset: 0, count: resetCount(), gained: 0, start: Date.now(),
         cf: String(P().cof.coreFragments[target]) });
       ctx.did();
     }
