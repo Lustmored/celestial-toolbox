@@ -65,3 +65,9 @@ npm run build      # dist/celestial-toolbox.user.js, dist/celestial-toolbox.js, 
 
 GitHub Actions (`.github/workflows/pages.yml`) buduje projekt i publikuje `dist/` na GitHub Pages.
 Wymaga włączenia Pages w ustawieniach repo (Source: GitHub Actions).
+
+## Chmura galaxy.click
+
+Przyciski „☁ Zapisz” / „☁ Wczytaj” w stopce panelu zapisują i wczytują grę ze slotu 0 galaxy.click.
+Działają tylko, gdy gra jest otwarta przez https://galaxy.click/play/470 (API galaxy to postMessage do okna nadrzędnego).
+Save jest kompresowany (deflate, prefiks `ctb1:`), bo surowy przekracza limit 256 kB slotu – taki zapis wczytasz tylko przez toolbox.

@@ -2,6 +2,7 @@
 // więc nic się nie nakłada. Panel żyje poza drzewem Vue gry (Shadow DOM).
 
 import { macros, info, setEnabled, runOnce } from "./scheduler.js";
+import { cloudSave, cloudFetch } from "./galaxy.js";
 import { settings, macroSettings, save, exportSettings, importSettings } from "./settings.js";
 
 const WIDTH = 300;
@@ -194,6 +195,10 @@ export function mountUI(version) {
       h("span", { class: "keys" }, "Alt+M panel · Alt+P pauza"),
       h("button", { title: "Skopiuj ustawienia do schowka", onclick: copySettings }, "Eksport"),
       h("button", { title: "Wklej ustawienia", onclick: pasteSettings }, "Import")),
+    h("div", { class: "foot cloud" },
+      h("span", { class: "keys" }, "galaxy.click, slot 0"),
+      h("button", { title: "Zapisz grę w chmurze galaxy.click (slot 0)", onclick: doCloudSave }, "☁ Zapisz"),
+      h("button", { title: "Wczytaj grę z chmury galaxy.click (slot 0)", onclick: doCloudLoad }, "☁ Wczytaj")),
   );
   shadow.append(root);
   document.body.append(host);
@@ -216,6 +221,26 @@ export function mountUI(version) {
     if (!json) return;
     try { importSettings(json); location.reload(); }
     catch (err) { alertish("Niepoprawne ustawienia: " + err.message); }
+  }
+  async function doCloudSave() {
+    cloudNote("Zapisuję…", 60000);
+    try { const n = await cloudSave(); cloudNote(`Zapisano (${Math.round(n / 1000)} kB).`); }
+    catch (err) { cloudNote("Błąd: " + err.message, 6000); }
+  }
+  async function doCloudLoad() {
+    cloudNote("Pobieram…", 60000);
+    try {
+      const { label, save: data } = await cloudFetch();
+      cloudNote("Pobrano.");
+      if (!window.confirm(`Wczytać save z galaxy.click?\n${label ?? ""}\n\nBieżący postęp zostanie nadpisany.`)) return;
+      window.importSave(data, true);
+    } catch (err) { cloudNote("Błąd: " + err.message, 6000); }
+  }
+  function cloudNote(msg, ms = 3000) {
+    const el = root.querySelector(".cloud .keys");
+    clearTimeout(cloudNote.t);
+    el.textContent = msg;
+    cloudNote.t = setTimeout(() => { el.textContent = "galaxy.click, slot 0"; }, ms);
   }
   function alertish(msg) {
     const foot = root.querySelector(".keys");
