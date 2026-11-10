@@ -2,7 +2,7 @@
 // Nowe makro: plik w src/macros/, eksport obiektu, dopisanie tutaj.
 import { cbClaimAll, dotKnight, fragmentation, singularityPets } from "./checkback.js";
 import { moonstone, repliGrass } from "./grids.js";
-import { hexVexes } from "./hex.js";
+import { hexVexes, dreamRealm } from "./hex.js";
 import { casinoKiller, smaAutoEnter, darkGrass } from "./darkness.js";
 import { coreFragmentFarm } from "./corefrags.js";
 import { spaceDust } from "./space.js";
@@ -13,7 +13,7 @@ import { bhSkillButtons } from "./tweaks.js";
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
   moonstone, repliGrass,
-  hexVexes,
+  hexVexes, dreamRealm,
   casinoKiller, smaAutoEnter, darkGrass, coreFragmentFarm,
   spaceDust,
   rocketPassengers, rocketMaker,
