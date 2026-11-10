@@ -80,3 +80,25 @@ export const smaAutoEnter = {
     }
   },
 };
+
+// Dark Grass: siatka 5×5, ID komórki = kolumna*100 + wiersz. Komórki rosną do limitu
+// (Max Grass) i dalej stoją, więc zbieranie wszystkiego, co > 0, niczego nie traci.
+export const darkGrass = {
+  id: "dark-grass",
+  name: "Dark Grass",
+  group: "Darkness / SMA",
+  every: 1,
+  description: "Zbiera trawę ze wszystkich pól siatki Dark Grass (to samo, co klikanie pól).",
+  available: () => Boolean(window.player?.dgr && window.layers?.dgr?.grid?.onClick && window.tmp?.dgr?.layerShown === true),
+  run(ctx) {
+    let n = 0;
+    for (let col = 1; col <= 5; col++) {
+      for (let row = 1; row <= 5; row++) {
+        const id = col * 100 + row;
+        const v = window.getGridData("dgr", id);
+        if (v?.gt?.(0)) { window.layers.dgr.grid.onClick(v, id); n++; }
+      }
+    }
+    if (n) { ctx.did(n); ctx.status(`ostatnio ${n} pól`); }
+  },
+};
