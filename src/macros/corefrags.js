@@ -12,13 +12,15 @@ const HALTERS = ["points", "factor", "prestige", "trees", "grass", "goldenGrass"
 // cap: halter w trybie limitu = 1. interval: dla trybu nieadaptacyjnego.
 // Zmierzone na Twoim save (PP 5e5, 3–4 min na wariant).
 const PRESETS = {
-  6: { pause: [], cap: [], interval: 0.15, always: true, note: "wymaga wysokiego PP" },
-  3: { pause: [], cap: ["antimatter"], interval: 1, note: "" },
-  0: { pause: ["U2"], cap: [], interval: 10, note: "pauza U2" },
-  5: { pause: ["U1"], cap: [], interval: 30, note: "pauza U1" },
-  4: { pause: ["U1", "U2"], cap: [], interval: 3, note: "pauza U1+U2, wymaga PP < ~1e5" },
-  1: { pause: ["U2"], cap: ["factor"], interval: 15, note: "teraz przegrywa z Radioactive" },
-  2: { pause: ["U2"], cap: ["factor"], interval: 15, note: "teraz przegrywa z Radioactive" },
+  // sdOff: wyłącza produkcję Singularity Dimensions (moc SD = 0 → wynik Radioactive = 0).
+  // xp w cap: halter XP z Check Back – zbija wynik Temporal, ale XP z przycisków CB leci wtedy ~0.
+  6: { pause: [], cap: [], sdOff: false, interval: 0.15, always: true, note: "wymaga wysokiego PP" },
+  3: { pause: [], cap: ["antimatter"], sdOff: true, interval: 1, note: "" },
+  1: { pause: ["U2"], cap: ["factor", "code", "xp"], sdOff: true, interval: 15, note: "SD off + halter XP" },
+  2: { pause: ["U2"], cap: ["factor", "grasshoppers", "xp"], sdOff: true, interval: 15, note: "SD off + halter XP" },
+  0: { pause: ["U2"], cap: ["trees", "code", "xp"], sdOff: true, interval: 10, note: "SD off + halter XP, nietestowane" },
+  5: { pause: ["U1"], cap: ["infinities", "xp"], sdOff: true, interval: 30, note: "SD off + halter XP, nietestowane" },
+  4: { pause: ["U1", "U2"], cap: ["xp"], sdOff: false, interval: 3, note: "halter XP, nietestowane" },
 };
 
 const dec = v => new window.Decimal(v);
@@ -56,6 +58,10 @@ function applyPreset(ctx, target, interval) {
   setPaused(newly, true);
   ctx.state.paused = [...new Set([...ours.filter(u => preset.pause.includes(u)), ...newly])];
 
+  // Singularity Dimensions: pausedDimensions === true oznacza w grze „produkcja włączona”.
+  ctx.state.sdPrev ??= P().sd.pausedDimensions;
+  P().sd.pausedDimensions = preset.sdOff ? false : ctx.state.sdPrev;
+
   allHaltersOff();
   for (const k of preset.cap) {
     const e = P().po.halter[k];
@@ -76,20 +82,21 @@ export const coreFragmentFarm = {
   id: "core-fragment-farm",
   name: "Farma core fragmentów",
   group: "Darkness / SMA",
-  description: "Wybierz typ CF i włącz. Makro ustawia halter, pauzę uniwersów i Auto Singularity. "
+  description: "Wybierz typ CF i włącz. Makro ustawia halter, pauzę uniwersów, pauzę Singularity Dimensions i Auto Singularity. "
+    + "Presety z halterem XP sprawiają, że przyciski XP w Check Back dają ~0 – wyłącz na ten czas CB Claim All. "
     + "Tryb adaptacyjny: licznik Auto Singularity chodzi tylko, gdy wybrany typ prowadzi "
     + "(z resetem awaryjnym, gdy utknie). Wyłączenie zdejmuje haltery, odpauzowuje uniwersa "
     + "i wyłącza Auto Singularity.",
   every: 0,
   params: [
     { key: "target", label: "Typ CF", type: "select", default: "6",
-      options: [6, 3, 0, 5, 4, 1, 2].map(i => [String(i), NAMES[i] + (PRESETS[i].note ? ` (${PRESETS[i].note})` : "")]) },
+      options: [6, 3, 1, 2, 0, 5, 4].map(i => [String(i), NAMES[i] + (PRESETS[i].note ? ` (${PRESETS[i].note})` : "")]) },
     { key: "adaptive", label: "Adaptacyjnie (reset tylko, gdy cel prowadzi)", type: "bool", default: true },
     { key: "fastInterval", label: "Interwał w trybie adaptacyjnym (s)", type: "number", default: 0.15, min: 0.05 },
     { key: "stuckReset", label: "Reset awaryjny po tylu s bez okna (0 = nigdy)", type: "number", default: 30, min: 0 },
     { key: "restorePrevious", label: "Po wyłączeniu przywróć poprzednie haltery i AS", type: "bool", default: false },
   ],
-  available: () => Boolean(window.player?.po?.halter && window.player?.sma && window.player?.cof
+  available: () => Boolean(window.player?.po?.halter && window.player?.sma && window.player?.cof && window.player?.sd
     && typeof window.pauseUniverse === "function"),
 
   onEnable(ctx) {
@@ -102,6 +109,8 @@ export const coreFragmentFarm = {
   onDisable(ctx) {
     if (!this.available()) return;
     setPaused(ctx.state.paused ?? [], false);
+    if (ctx.state.sdPrev !== undefined && ctx.state.sdPrev !== null) P().sd.pausedDimensions = ctx.state.sdPrev;
+    ctx.state.sdPrev = null;
     if (ctx.p.restorePrevious && ctx.state.snap) {
       for (const [k, v] of Object.entries(ctx.state.snap.halter)) {
         const e = P().po.halter[k];
