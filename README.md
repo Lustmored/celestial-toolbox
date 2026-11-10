@@ -70,4 +70,4 @@ Wymaga włączenia Pages w ustawieniach repo (Source: GitHub Actions).
 
 Przyciski „☁ Zapisz” / „☁ Wczytaj” w stopce panelu zapisują i wczytują grę ze slotu 0 galaxy.click.
 Działają tylko, gdy gra jest otwarta przez https://galaxy.click/play/470 (API galaxy to postMessage do okna nadrzędnego).
-Save jest kompresowany (deflate, prefiks `ctb1:`), bo surowy przekracza limit 256 kB slotu – taki zapis wczytasz tylko przez toolbox.
+Zapis zawiera save gry i ustawienia toolboxa (skompresowane, prefiks `ctb2:`), bo surowy save przekracza limit 256 kB slotu – taki zapis wczytasz tylko przez toolbox. Wczytanie rozpoznaje też starszy `ctb1:` i zwykły eksport gry.

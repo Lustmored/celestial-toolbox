@@ -48,5 +48,7 @@ export function exportSettings() {
 
 export function importSettings(json) {
   state = { ...defaults(), ...JSON.parse(json) };
-  save();
+  // Zapis od razu (bez opóźnienia), bo zaraz po imporcie strona zwykle się przeładowuje.
+  clearTimeout(saveTimer);
+  localStorage.setItem(KEY, JSON.stringify(state));
 }

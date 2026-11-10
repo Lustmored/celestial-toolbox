@@ -224,15 +224,17 @@ export function mountUI(version) {
   }
   async function doCloudSave() {
     cloudNote("Zapisuję…", 60000);
-    try { const n = await cloudSave(); cloudNote(`Zapisano (${Math.round(n / 1000)} kB).`); }
+    try { const n = await cloudSave(exportSettings()); cloudNote(`Zapisano grę i ustawienia (${Math.round(n / 1000)} kB).`); }
     catch (err) { cloudNote("Błąd: " + err.message, 6000); }
   }
   async function doCloudLoad() {
     cloudNote("Pobieram…", 60000);
     try {
-      const { label, save: data } = await cloudFetch();
+      const { label, save: data, toolbox } = await cloudFetch();
       cloudNote("Pobrano.");
-      if (!window.confirm(`Wczytać save z galaxy.click?\n${label ?? ""}\n\nBieżący postęp zostanie nadpisany.`)) return;
+      const extra = toolbox ? "\nUstawienia toolboxa też zostaną zastąpione zapisanymi." : "";
+      if (!window.confirm(`Wczytać save z galaxy.click?\n${label ?? ""}\n\nBieżący postęp zostanie nadpisany.${extra}`)) return;
+      if (toolbox) importSettings(toolbox);
       window.importSave(data, true);
     } catch (err) { cloudNote("Błąd: " + err.message, 6000); }
   }
