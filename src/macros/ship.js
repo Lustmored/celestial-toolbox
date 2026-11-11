@@ -181,13 +181,16 @@ const Hunter = (() => {
       }
       if (target) {
         const ex = tx + (target.vx || 0) * N - q.x, ey = ty + (target.vy || 0) * N - q.y, d = Math.hypot(ex, ey);
-        cost += Math.abs(d - standoff) + aimSum / N; // celowanie liczone średnio po całym horyzoncie
+        cost += (O.length ? 0.3 : 1) * Math.abs(d - standoff) + aimSum / N; // celowanie liczone średnio po całym horyzoncie
       }
+      // XP to priorytet: każdy niezebrany orb ciągnie statek do siebie (liniowo z odległością, mocniej gdy orb zaraz zniknie),
+      // a zebrany w horyzoncie daje premię. Waga dominuje nad celowaniem i dystansem do wroga.
       for (const o of orbs) {
-        if (o.got) continue;
-        const d = Math.hypot(q.x - o.x, q.y - o.y) - 30, left = 2 * (o.timer - N);
-        if (d > left) cost += CFG.orbW;           // przy takim manewrze orb zdąży zniknąć
-        else cost += CFG.orbW * 0.15 * (d / Math.max(1, left)); // i tak dobiegnie, ale bliżej = pewniej
+        const urg = 1 + Math.max(0, 600 - o.timer) / 200;
+        if (o.got) { cost -= CFG.orbW * urg; continue; }
+        const d = Math.max(0, Math.hypot(q.x - o.x, q.y - o.y) - 30);
+        cost += CFG.orbW * urg * (d / 250);
+        if (d > 2 * (o.timer - N)) cost += CFG.orbW * urg; // nie zdąży dolecieć — przepadnie
       }
       if (cand === cands[cands.length - 1] && cands.length > ctl.cands().length) cost *= 0.9; // premia za trzymanie się planu
       if (cost < bestCost) { bestCost = cost; bestC = cand; }
