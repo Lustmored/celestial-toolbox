@@ -95,7 +95,7 @@ const Hunter = (() => {
     if (!a || !a.ship || !a.running) return;
     const st = window.player.ir.shipType, s = a.ship, kind = KIND[st] || 'rot', ctl = CTRL[kind], ram = kind == 'mouse';
     // not driven: menus (upgrade choice/pause), mobile controls (game ignores keys), mouse-only ships unless allowed
-    if (!enabled || window.player.ir.menu != 0 || window.player.ir.mobileControls > 0 || (ram && !CFG.allowMouse)) return release(a);
+    if (!enabled || window.player.ir.menu != 0 || window.player.ir.mobileControls > 0) return release(a);
     const W = a.width, H = a.height, ms = a.shipStats.moveSpeed || 0, shipR = ram ? s.radius : 12; // hitbox: arena.js 2921/2972
     const rel = o => [wrapD(o.x - s.x, W), wrapD(o.y - s.y, H)];
 
@@ -274,13 +274,15 @@ export const shipHunter = {
     "przewidując ich ruch ~40 klatek naprzód. Strzela autoshoot gry — musi być włączony. Gdy coś wciśniesz sam, " +
     "bot i tak nadpisze klawisze w następnej klatce, więc do ręcznego latania wyłącz przełącznik. " +
     "Pilnuje XP: nie ucieka tak daleko, żeby orby XP zdążyły zniknąć. Po level upie sam wybiera ulepszenie: najwyższa rzadkość, " +
-    "przy remisie XP, potem prędkość ruchu > atak > rozmiar pocisku > zasoby > obrona > regeneracja. Nie działa przy sterowaniu mobilnym.",
+    "przy remisie XP, potem prędkość ruchu > atak > rozmiar pocisku > zasoby > obrona > regeneracja. " +
+    "Statki bez sterowania WASD (lecą/toczą się w stronę kursora) bot prowadzi wirtualnym kursorem — nie ruszaj wtedy myszką nad grą. " +
+    "Nie działa przy sterowaniu mobilnym.",
   params: [
     { key: "aggression", label: "Agresja celowania (0–200, więcej = mocniej trzyma cel na muszce)", type: "number", default: 100, min: 0, step: 10 },
     { key: "margin", label: "Margines bezpieczeństwa (px)", type: "number", default: 14, min: 0, step: 2 },
     { key: "orbPriority", label: "Priorytet zbierania XP (0–200)", type: "number", default: 100, min: 0, step: 10 },
     { key: "autoUpgrade", label: "Sam wybieraj ulepszenia po level upie", type: "bool", default: true },
-    { key: "allowMouse", label: "Steruj kursorem dla statków, które celują/latają za myszką", type: "bool", default: false },
+    { key: "allowMouse", label: "Celuj kursorem w statkach, które strzelają w stronę myszki", type: "bool", default: false },
   ],
   available: () => Boolean(window.player?.ir),
   onEnable(ctx) { applyParams(ctx.p); this._p = ctx.p; this._t = setInterval(() => applyParams(this._p), 1000); Hunter.start(); },
