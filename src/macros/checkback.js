@@ -2,6 +2,49 @@ import { spendWhenFull } from "./lib/spendWhenFull.js";
 
 // Check Back: Claim All, Dot Knight, Fragmentation, Singularity Pets.
 
+// Pety: awans poziomu za zebrane XP (duplikaty) i Ascend po dobiciu limitu poziomu.
+// Tylko pety o ID < 1000 – wyższe ID kosztują Shards of Ascension, tych makro nie rusza.
+function petIds() {
+  return Object.keys(window.layers.pet?.levelables ?? {})
+    .map(Number).filter(id => Number.isInteger(id) && id > 0 && id < 1000);
+}
+function levelPets(ids) {
+  let n = 0;
+  for (const id of ids) {
+    for (let k = 0; k < 200; k++) {
+      const t = window.tmp.pet.levelables[id];
+      if (!t?.unlocked || !t.canBuy) break;
+      const before = String(window.getLevelableAmount("pet", id));
+      window.buyLevelable("pet", id);
+      if (String(window.getLevelableAmount("pet", id)) === before) break;
+      n++;
+    }
+  }
+  return n;
+}
+function ascendPets(ids) {
+  if (!window.player.ev?.evolutionsUnlocked?.[3]) return 0;
+  const L = window.layers.pet.levelables;
+  const prev = L.index;
+  let n = 0;
+  try {
+    for (const id of ids) {
+      const limit = window.tmp.pet.levelables[id]?.levelLimit;
+      if (limit === undefined || !window.tmp.pet.levelables[id]?.unlocked) continue;
+      if (window.getLevelableAmount("pet", id).lt(limit)) continue;
+      // Ten sam przycisk „Ascend Pet”, co w grze – działa na aktualnie wybranym pecie.
+      L.index = id;
+      window.updateClickableTemp("pet");
+      window.clickClickable("pet", 7);
+      n++;
+    }
+  } finally {
+    L.index = prev;
+    window.updateClickableTemp("pet");
+  }
+  return n;
+}
+
 export const cbClaimAll = {
   id: "cb-claim-all",
   name: "CB Claim All",
@@ -9,8 +52,12 @@ export const cbClaimAll = {
   every: 1,
   description:
     "Klika trzy przyciski Claim All w Check Back (XP, skrzynki, Pet Points), dwa Claim All u Marcela (Evo i Paragon Shards) " +
-    "oraz gotowe przyciski Dragona " +
-    "(tylko te, które gra Ci pokazuje).",
+    "oraz gotowe przyciski Dragona (tylko te, które gra Ci pokazuje). Opcjonalnie awansuje pety za zebrane XP " +
+    "i robi Ascend petów, które doszły do limitu poziomu (potem znów awansuje za resztę XP).",
+  params: [
+    { key: "levelPets", label: "Awansuj pety za zebrane XP", type: "bool", default: true },
+    { key: "ascendPets", label: "Ascend petów na limicie poziomu", type: "bool", default: true },
+  ],
   available: g => g.layerActive("cb"),
   run(ctx) {
     for (const id of [99, 199, 299]) if (ctx.click("cb", id)) ctx.did();
@@ -18,6 +65,19 @@ export const cbClaimAll = {
     for (const id of [99, 199]) if (ctx.click("ev8", id)) ctx.did();
     // Dragon: przyciski 1–3 (złoto) i 4–6; ctx.click pomija ukryte i nieodblokowane.
     for (let id = 1; id <= 6; id++) if (ctx.click("ep1", id)) ctx.did();
+
+    if (!window.layers.pet?.levelables || !(ctx.p.levelPets || ctx.p.ascendPets)) return;
+    window.updateLevelableTemp("pet");
+    const ids = petIds();
+    let lv = 0, asc = 0;
+    for (let round = 0; round < 5; round++) {
+      const a = ctx.p.levelPets ? levelPets(ids) : 0;
+      const b = ctx.p.ascendPets ? ascendPets(ids) : 0;
+      if (b) window.updateLevelableTemp("pet");
+      lv += a; asc += b;
+      if (!a && !b) break;
+    }
+    if (lv || asc) { ctx.did(lv + asc); ctx.log(`Pety: +${lv} poziomów, ${asc}× Ascend`); }
   },
 };
 
