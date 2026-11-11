@@ -102,3 +102,66 @@ export const darkGrass = {
     if (n) { ctx.did(n); ctx.status(`ostatnio ${n} pól`); }
   },
 };
+
+// Normality (DU1): pętla reset → kupno ulepszeń Normality → reset…
+// Tylko klika te same przyciski co gracz (reset dn 11 i buyable dn), niczego nie dodaje.
+export const normalityLoop = {
+  id: "normality-loop",
+  name: "Normality: reset + rebuy",
+  group: "Darkness / SMA",
+  every: 0.25,
+  description:
+    "Kupuje odblokowane ulepszenia Normality (najtańsze najpierw) i robi reset Normality w chwili, gdy " +
+    "zysk na sekundę od ostatniego resetu przestaje rosnąć (szczyt tempa) — albo po stałym czasie, jeśli tak wolisz. " +
+    "Nie robi resetu Space Energy.",
+  params: [
+    { key: "buy", label: "Kupuj ulepszenia Normality", type: "bool", default: true },
+    { key: "reset", label: "Rób reset Normality", type: "bool", default: true },
+    { key: "mode", label: "Kiedy resetować", type: "select", default: "peak",
+      options: [["peak", "na szczycie tempa zysku"], ["time", "co stały czas"]] },
+    { key: "minSec", label: "Min. czas między resetami (s)", type: "number", default: 1, min: 0.25, step: 0.25 },
+    { key: "fixedSec", label: "Stały czas resetu (s, tryb „co stały czas”)", type: "number", default: 10, min: 0.25 },
+  ],
+  available: g => g.layerActive("dn") && Boolean(window.layers.dn?.clickables?.[11]),
+  run(ctx) {
+    const P = window.player, D = window.Decimal, st = ctx.state, now = Date.now();
+    let bought = 0;
+    if (ctx.p.buy) {
+      for (let guard = 0; guard < 500; guard++) {
+        let best = null;
+        for (const id of [11, 12, 13, 14, 15]) {
+          const t = window.tmp.dn.buyables?.[id];
+          if (!t || !t.unlocked || !t.canBuy) continue;
+          if (!best || new D(t.cost).lt(best.cost)) best = { id, cost: new D(t.cost) };
+        }
+        if (!best) break;
+        const before = new D(P.dn.buyables[best.id]);
+        window.buyBuyable("dn", best.id);
+        if (new D(P.dn.buyables[best.id]).lte(before)) break;
+        bought++;
+      }
+      if (bought) ctx.did(bought);
+    }
+
+    const gain = new D(P.dn.normalityToGet);
+    st.t0 ??= now;
+    // Ręczny reset (albo reset z innego źródła) — zysk nagle spadł: zaczynamy liczyć od nowa.
+    if (st.lastGain && gain.lt(new D(st.lastGain).mul(0.5))) { st.t0 = now; st.bestRate = 0; }
+    st.lastGain = gain.toString();
+    const sec = (now - st.t0) / 1000;
+    const rate = sec > 0 ? gain.div(sec) : new D(0);
+    let why = "";
+    if (ctx.p.reset && sec >= ctx.p.minSec && gain.gte(1)) {
+      if (ctx.p.mode === "time") { if (sec >= ctx.p.fixedSec) why = "czas"; }
+      else if (st.bestRate && rate.lt(new D(st.bestRate))) why = "szczyt tempa";
+    }
+    if (!st.bestRate || rate.gt(new D(st.bestRate))) st.bestRate = rate.toString();
+    if (why && ctx.click("dn", 11, { refresh: true })) {
+      ctx.did();
+      st.t0 = now; st.bestRate = 0; st.lastGain = null;
+      ctx.status(`reset (${why}) po ${sec.toFixed(1)} s, +${window.format(gain)} · kupiono ${bought}`);
+      return;
+    }
+    ctx.status(`zysk +${window.format(gain)} po ${sec.toFixed(1)} s · kupiono ${bought}`);
+  },
+};
