@@ -228,7 +228,10 @@ const Hunter = (() => {
     if (bi < 0) return;
     a.selectedUpgradeIndex = bi;
     lastPickNote = a.upgradeChoices[bi];
-    if (typeof window.clickClickable === 'function') { window.updateClickableTemp?.('ir'); window.clickClickable('ir', 'levelUpUpgrade_confirm'); }
+    // To samo co kliknięcie „Confirm”, ale bez odświeżania tmp wszystkich klikalnych ir — ich style() rzucają błędy,
+    // gdy lista wyborów jest już pusta (stąd TypeError „upg is undefined” w konsoli).
+    const conf = window.layers?.ir?.clickables?.levelUpUpgrade_confirm;
+    if (conf && conf.canClick.call(conf)) conf.onClick.call(conf);
   }
 
   // Game loop = setInterval(() => this.update(), 1000/60) (arena.js 1420): `update` is looked up on the instance each
