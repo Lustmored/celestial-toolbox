@@ -9,7 +9,7 @@ import { spaceDust } from "./space.js";
 import { petShop, fragmentShop } from "./shops.js";
 import { rocketPassengers, rocketMaker } from "./rocket.js";
 import { bhSkillButtons } from "./tweaks.js";
-import { shipHunter } from "./ship.js";
+import { shipHunter, shipArenaHide } from "./ship.js";
 
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -18,6 +18,6 @@ export default [
   casinoKiller, smaAutoEnter, darkGrass, normalityLoop, coreFragmentFarm,
   spaceDust,
   rocketPassengers, rocketMaker,
-  shipHunter,
+  shipHunter, shipArenaHide,
   bhSkillButtons,
 ];
