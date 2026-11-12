@@ -282,7 +282,7 @@ export const shipHunter = {
     { key: "margin", label: "Margines bezpieczeństwa (px)", type: "number", default: 14, min: 0, step: 2 },
     { key: "orbPriority", label: "Priorytet zbierania XP (0–200)", type: "number", default: 100, min: 0, step: 10 },
     { key: "autoUpgrade", label: "Sam wybieraj ulepszenia po level upie", type: "bool", default: true },
-    { key: "allowMouse", label: "Celuj kursorem w statkach, które strzelają w stronę myszki", type: "bool", default: false },
+    { key: "allowMouse", label: "Celuj kursorem w statkach, które strzelają w stronę myszki", type: "bool", default: true },
   ],
   available: () => Boolean(window.player?.ir),
   onEnable(ctx) { applyParams(ctx.p); this._p = ctx.p; this._t = setInterval(() => applyParams(this._p), 1000); Hunter.start(); },
