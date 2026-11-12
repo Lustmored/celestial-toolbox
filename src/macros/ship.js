@@ -292,34 +292,3 @@ export const shipHunter = {
   onDisable() { clearInterval(this._t); Hunter.stop(); },
 };
 export { Hunter };
-
-// Ukrywa nakładkę areny (#space-arena, fixed, z-index 9999), żeby w trakcie walki móc korzystać z reszty gry.
-// Walka i bot liczą się dalej — gra rysuje po prostu na niewidocznym canvasie.
-// `options` w grze to globalne `let`, więc nie ma go na window.
-// eslint-disable-next-line no-undef
-const gameOptions = () => window.options || (typeof options !== "undefined" ? options : null);
-
-export const shipArenaHide = {
-  id: "ship-arena-hide",
-  name: "Walka w tle (schowaj arenę)",
-  group: "Iridite",
-  toggle: true,
-  description:
-    "Chowa okno walki statkami i przywraca lewe menu, żeby w trakcie runu przełączać się na inne zakładki (np. Hex). Walka i bot działają dalej. " +
-    "Wyłącz, żeby znów zobaczyć arenę (np. przy wyborze ulepszeń, jeśli nie wybiera ich bot).",
-  available: () => Boolean(window.player?.ir),
-  onEnable() {
-    const apply = () => {
-      const d = document.getElementById("space-arena");
-      if (d && d.style.visibility !== "hidden") { d.style.visibility = "hidden"; d.style.pointerEvents = "none"; }
-      // Wejście do walki włącza tryb pełnoekranowy gry (options.fullscreen), który chowa lewe menu — oddajemy menu.
-      const o = gameOptions(); if (window.player.ir.inBattle && o && o.fullscreen) o.fullscreen = false;
-    };
-    apply(); this._t = setInterval(apply, 300);
-  },
-  onDisable() {
-    clearInterval(this._t);
-    const d = document.getElementById("space-arena"); if (d) { d.style.visibility = ""; d.style.pointerEvents = ""; }
-    const o = gameOptions(); if (window.player?.ir?.inBattle && o) o.fullscreen = true;
-  },
-};

@@ -28,7 +28,7 @@ Bez wtyczki: na tej samej stronie jest bookmarklet.
 
 ## Makra
 
-CB Claim All, Dot Knight, Fragmentation, Singularity Pets, Pet Points, Fragment Shop, Rocket Passengers, Moonstone Killer, Repli-Grass, Hex of Vexes, Dream Realm, Casino Killer, SMA Auto-enter, Dark Grass, Normality: reset + rebuy, Farma core fragmentów (preset haltera + Auto Singularity pod wybrany typ CF), Space Dust, Fuel & Parts, Walka statkami: bot (polowanie + uniki, tylko wirtualne WASD), Walka w tle (schowaj arenę), BH skill buttons.
+CB Claim All, Dot Knight, Fragmentation, Singularity Pets, Pet Points, Fragment Shop, Rocket Passengers, Moonstone Killer, Repli-Grass, Hex of Vexes, Dream Realm, Casino Killer, SMA Auto-enter, Dark Grass, Farma core fragmentów (preset haltera + Auto Singularity pod wybrany typ CF), Space Dust, Fuel & Parts, Walka statkami: bot (polowanie + uniki, tylko wirtualne WASD), Space Exploration: auto-podróże, BH skill buttons.
 Singularity Pets i Space Dust używają wspólnej reguły „zapełniło się → wydaj” (`src/macros/lib/spendWhenFull.js`).
 
 ## Dodanie makra
