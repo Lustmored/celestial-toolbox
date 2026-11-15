@@ -11,7 +11,7 @@ import { rocketPassengers, rocketMaker } from "./rocket.js";
 import { bhSkillButtons } from "./tweaks.js";
 import { shipHunter } from "./ship.js";
 import { starExplore } from "./exploration.js";
-import { pollenLoop } from "./hive.js";
+import { pollenLoop, nectarLoop } from "./hive.js";
 
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -21,6 +21,6 @@ export default [
   spaceDust,
   rocketPassengers, rocketMaker,
   shipHunter, starExplore,
-  pollenLoop,
+  pollenLoop, nectarLoop,
   bhSkillButtons,
 ];

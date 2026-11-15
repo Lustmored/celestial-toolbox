@@ -84,3 +84,60 @@ export const pollenLoop = {
     }
   },
 };
+
+// Nectar: łańcuch resetów (pszczoły → α → β → γ → δ → …). Każdy reset zeruje niższe poziomy, więc robimy klasyczną
+// regułę „resetuj, gdy zysk ≥ R × to, co już masz na tym poziomie” — od najwyższego poziomu w dół, jeden reset na takt.
+const NECTAR = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
+const NECTAR_SYM = ["α", "β", "γ", "δ", "ε", "ζ"];
+
+export const nectarLoop = {
+  id: "nectar-loop",
+  name: "Nectar: ulepszenia + resety",
+  group: "Hive",
+  every: 0.2,
+  description:
+    "Kupuje dostępne ulepszenia Nectar, a potem robi reset na najwyższym poziomie, na którym zysk jest co najmniej " +
+    "R razy większy od tego, co już na nim masz (domyślnie R = 0,25 — najlepsze w testach; 1 = reset podwaja stan). Gdy na danym poziomie masz 0, " +
+    "resetuje od razu, jak tylko się da. Jeden reset na takt, od góry w dół.",
+  params: [
+    { key: "upgrades", label: "Kupuj ulepszenia Nectar", type: "bool", default: true },
+    { key: "ratio2", label: "R: resetuj, gdy zysk ≥ R × stan", type: "number", default: 0.25, min: 0.05, step: 0.05 },
+    { key: "minGap", label: "Min. odstęp między resetami (s)", type: "number", default: 1, min: 0.2, step: 0.2 },
+    { key: "maxTier", label: "Najwyższy poziom do resetowania (1 = tylko α)", type: "number", default: 6, min: 1, max: 6, step: 1 },
+  ],
+  available: g => g.layerActive("ne") && Boolean(window.player?.ne?.alpha),
+  run(ctx) {
+    const P = window.player, D = window.Decimal, ne = P.ne;
+    let bought = 0;
+    if (ctx.p.upgrades) {
+      for (let pass = 0; pass < 5; pass++) {
+        let any = false;
+        for (const id of Object.keys(window.layers.ne.upgrades || {})) {
+          if (isNaN(id) || window.hasUpgrade("ne", id)) continue;
+          const t = window.tmp.ne.upgrades[id];
+          if (!t || !t.unlocked) continue;
+          if (window.canAffordUpgrade && !window.canAffordUpgrade("ne", id)) continue;
+          window.buyUpgrade("ne", id);
+          if (window.hasUpgrade("ne", id)) { bought++; any = true; }
+        }
+        if (!any) break;
+        window.updateTemp?.();
+      }
+    }
+    const L = window.layers.ne.clickables, T = window.tmp.ne.clickables;
+    for (let k = Math.min(6, ctx.p.maxTier); k >= 1; k--) {
+      const key = NECTAR[k - 1], c = L[k];
+      if (!c || !ne[key] || T[k]?.unlocked === false || !c.canClick.call(c)) continue;
+      const gain = new D(ne[key].gain), have = new D(ne[key].amount);
+      if (gain.lte(0) || gain.lt(have.mul(ctx.p.ratio2))) continue;
+      if (Date.now() - (ctx.state.lastReset || 0) < ctx.p.minGap * 1000) { ctx.status(`czekam na odstęp między resetami`); return; }
+      ctx.state.lastReset = Date.now();
+      c.onClick.call(c);
+      ctx.did(bought + 1);
+      ctx.status(`reset ${NECTAR_SYM[k - 1]}: +${window.format(gain)} (miałeś ${window.format(have)})` + (bought ? ` · ulepszeń: ${bought}` : ""));
+      return;
+    }
+    if (bought) ctx.did(bought);
+    ctx.status(`czekam · α ${window.format(ne.alpha.amount)} (+${window.format(ne.alpha.gain)})` + (bought ? ` · ulepszeń: ${bought}` : ""));
+  },
+};
