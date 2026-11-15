@@ -102,3 +102,30 @@ export const darkGrass = {
     if (n) { ctx.did(n); ctx.status(`ostatnio ${n} pól`); }
   },
 };
+
+// Hive (UB) potrafi zostać zapauzowany na stałe: gra pauzuje go chwilowo przy Eclipse (umiejętność legendarnego peta)
+// i przy walce w Black Heart. Gdy te dwie pauzy się nałożą, po obu gra przywraca „pauzę” jako stan zapamiętany.
+// To makro odpauzowuje Hive tylko wtedy, gdy żadna z tych chwilowych pauz nie powinna już trwać.
+export const hiveUnpause = {
+  id: "hive-unpause",
+  name: "Pilnuj, żeby Hive nie wisiał na pauzie",
+  group: "Darkness / SMA",
+  every: 5,
+  description:
+    "Gra chwilowo pauzuje Hive (β) w czasie Eclipse i walki w Black Heart, a gdy obie pauzy się nałożą, Hive zostaje " +
+    "zapauzowany na stałe. Makro odpauzowuje go, gdy Eclipse nie trwa i nie toczy się walka w Black Heart. " +
+    "Wyłącz je, jeśli sam chcesz trzymać Hive na pauzie.",
+  available: () => Boolean(window.player?.uni?.UB && window.player.pol?.unlockHive >= 2 && typeof window.pauseUniverse === "function"),
+  run(ctx) {
+    const P = window.player;
+    if (!P.uni.UB.paused) { ctx.status("Hive działa"); return; }
+    const eclipse = Boolean(P.pet?.legPetTimers?.[0]?.active);
+    const bhFight = P.subtabs?.bh?.stuff === "bullet";
+    if (eclipse || bhFight) { ctx.status(`Hive na pauzie przez ${eclipse ? "Eclipse" : "walkę w Black Heart"} — czekam`); return; }
+    window.pauseUniverse("UB", "unpause");
+    P.uni.UB.lastPaused = false;
+    ctx.did();
+    ctx.log("odpauzowano Hive");
+    ctx.status("odpauzowano Hive");
+  },
+};
