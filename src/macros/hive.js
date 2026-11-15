@@ -94,7 +94,7 @@ export const nectarLoop = {
   id: "nectar-loop",
   name: "Nectar: ulepszenia + resety",
   group: "Hive",
-  every: 0.2,
+  every: 0.1,
   description:
     "Kupuje dostępne ulepszenia Nectar, a potem robi reset na najwyższym poziomie, na którym zysk jest co najmniej " +
     "R razy większy od tego, co już na nim masz (domyślnie R = 0,25 — najlepsze w testach; 1 = reset podwaja stan). Gdy na danym poziomie masz 0, " +
@@ -103,7 +103,7 @@ export const nectarLoop = {
     { key: "upgrades", label: "Kupuj ulepszenia Nectar", type: "bool", default: true },
     { key: "ratio2", label: "R: resetuj, gdy zysk ≥ R × stan", type: "number", default: 0.25, min: 0.05, step: 0.05 },
     { key: "lowerFirst", label: "Ile resetów niższego poziomu przed resetem wyższego", type: "number", default: 5, min: 1, step: 1 },
-    { key: "minGap", label: "Min. odstęp między resetami (s)", type: "number", default: 1, min: 0.2, step: 0.2 },
+    { key: "minGap2", label: "Min. odstęp między resetami (s)", type: "number", default: 0.1, min: 0.05, step: 0.05 },
     { key: "maxTier", label: "Najwyższy poziom do resetowania (1 = tylko α)", type: "number", default: 6, min: 1, max: 6, step: 1 },
   ],
   available: g => g.layerActive("ne") && Boolean(window.player?.ne?.alpha),
@@ -134,7 +134,7 @@ export const nectarLoop = {
       // Wyższy poziom dopiero po kilku resetach poziomu niżej (empirycznie dużo wydajniej niż od razu po jednym).
       const cnt = ctx.state.cnt || (ctx.state.cnt = {});
       if (k > 1 && (cnt[k - 1] || 0) < ctx.p.lowerFirst) continue;
-      if (Date.now() - (ctx.state.lastReset || 0) < ctx.p.minGap * 1000) { ctx.status(`czekam na odstęp między resetami`); return; }
+      if (Date.now() - (ctx.state.lastReset || 0) < ctx.p.minGap2 * 1000) { ctx.status(`czekam na odstęp między resetami`); return; }
       ctx.state.lastReset = Date.now();
       { const cnt = ctx.state.cnt || (ctx.state.cnt = {}); cnt[k] = (cnt[k] || 0) + 1; for (let j = 1; j < k; j++) cnt[j] = 0; }
       c.onClick.call(c);
