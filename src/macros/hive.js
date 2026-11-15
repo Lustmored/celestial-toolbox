@@ -21,7 +21,7 @@ export const pollenLoop = {
   params: [
     { key: "upgrades", label: "Kupuj ulepszenia Pollen", type: "bool", default: true },
     { key: "convert", label: "Konwertuj pollen w pszczoły", type: "bool", default: true },
-    { key: "saveFor", label: "Zbieraj na ulepszenie, jeśli kosztuje ≤ tyle przyrostów", type: "number", default: 100, min: 0, step: 10 },
+    { key: "saveForN", label: "Zbieraj na ulepszenie, jeśli kosztuje ≤ tyle przyrostów", type: "number", default: 5, min: 0, step: 1 },
     { key: "drone", label: "Rotuj: drony", type: "bool", default: true },
     { key: "worker", label: "Rotuj: robotnice", type: "bool", default: true },
     { key: "queen", label: "Rotuj: królowe", type: "bool", default: true },
@@ -60,7 +60,7 @@ export const pollenLoop = {
 
     // 2. Konwersja z rotacją rodzajów
     if (!ctx.p.convert) { if (bought) ctx.did(bought); ctx.status(`kupiono ulepszeń: ${bought}`); return; }
-    if (cheapest && ctx.p.saveFor > 0 && cheapest.cost.lte(inc.mul(ctx.p.saveFor)) && new D(bpl.pollen).lt(cheapest.cost)) {
+    if (cheapest && ctx.p.saveForN > 0 && cheapest.cost.lte(inc.mul(ctx.p.saveForN)) && new D(bpl.pollen).lt(cheapest.cost)) {
       if (bought) ctx.did(bought);
       ctx.status(`zbieram na ulepszenie: ${window.format(bpl.pollen)} / ${window.format(cheapest.cost)}`);
       return;
