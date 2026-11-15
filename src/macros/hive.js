@@ -146,3 +146,38 @@ export const nectarLoop = {
     ctx.status(`czekam · α ${window.format(ne.alpha.amount)} (+${window.format(ne.alpha.gain)})` + (bought ? ` · ulepszeń: ${bought}` : ""));
   },
 };
+
+// Kwiaty (fl): siatka 5×5; każdy kwiat ma „HP”, kliknięcie odejmuje Picking Power, a kliknięcie przy HP ≤ 0 go zbiera.
+// Makro klika każdy kwiat na siatce raz na takt — dokładnie to, co robi kliknięcie myszą.
+export const flowerPicker = {
+  id: "flower-picker",
+  name: "Kwiaty: zbieranie",
+  group: "Hive",
+  every: 0.1,
+  description:
+    "Co takt klika raz każdy kwiat na siatce (tak jak kliknięcie myszą): zbija mu licznik o Picking Power, " +
+    "a gdy licznik spadnie do zera — zbiera go do glosariusza.",
+  params: [
+    { key: "cps", label: "Kliknięć na kwiat na sekundę", type: "number", default: 10, min: 1, max: 10, step: 1 },
+  ],
+  available: g => g.layerActive("fl") && Boolean(window.layers?.fl?.grid),
+  run(ctx) {
+    const st = ctx.state, now = Date.now();
+    if (now - (st.last || 0) < 1000 / Math.max(1, Math.min(10, ctx.p.cps)) - 5) return;
+    st.last = now;
+    const grid = window.layers.fl.grid;
+    let clicks = 0, picked = 0;
+    for (let r = 1; r <= 5; r++) {
+      for (let c = 1; c <= 5; c++) {
+        const id = r * 100 + c;
+        const v = window.getGridData("fl", id);
+        if (!v || v[0] == 0) continue;
+        grid.onClick(v, id);
+        clicks++;
+        if (window.getGridData("fl", id)[0] == 0) picked++;
+      }
+    }
+    if (picked) { st.picked = (st.picked || 0) + picked; ctx.did(picked); }
+    ctx.status(clicks ? `kwiatów na siatce: ${clicks} · zebrano łącznie: ${st.picked || 0}` : `czekam na kwiaty · zebrano łącznie: ${st.picked || 0}`);
+  },
+};
