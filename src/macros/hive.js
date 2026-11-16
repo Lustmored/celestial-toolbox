@@ -35,14 +35,16 @@ function buyPollenUpgrades() {
 
 export const pollenLoop = {
   id: "pollen-loop",
-  name: "Pollen: ulepszenia + konwersja (rotacja)",
+  name: "Pollen + Bee Bread: ulepszenia, konwersja, resety",
   group: "Hive",
   every: 0.05,
   description:
     "Kupuje dostępne ulepszenia Pollen, a pollen konwertuje w pszczoły tuż przed nadejściem następnej partii pollenu — " +
     "do tego czasu pollen leży i napędza pasywny przyrost pszczół. Przy każdej konwersji bierze kolejny rodzaj " +
     "(drony → robotnice → królowe → …), pomijając te, które gra już generuje sama. Jeśli najtańsze niekupione ulepszenie " +
-    "kosztuje nie więcej niż podaną liczbę partii, zamiast konwertować zbiera na nie (0 = nigdy).",
+    "kosztuje nie więcej niż podaną liczbę partii, zamiast konwertować zbiera na nie (0 = nigdy). " +
+    "Bee Bread: reset na szczycie tempa cyklu (przyrost BB/s z resetu ÷ czas od ostatniego resetu); tryb „zbieranie” " +
+    "po szczycie wstrzymuje konwersje i zbiera pollen do drugiego szczytu (eksperymentalny). Tier BB — od razu, gdy dostępny.",
   params: [
     { key: "upgrades", label: "Kupuj ulepszenia Pollen", type: "bool", default: true },
     { key: "convert", label: "Konwertuj pollen w pszczoły", type: "bool", default: true },
@@ -50,6 +52,10 @@ export const pollenLoop = {
     { key: "lead", label: "Konwertuj tyle sekund przed partią", type: "number", default: 0.15, min: 0.05, step: 0.05 },
     { key: "everySec", label: "Bez partii (pollen na sekundę): konwertuj co (s)", type: "number", default: 5, min: 0.5, step: 0.5 },
     { key: "saveForN", label: "Zbieraj na ulepszenie, jeśli kosztuje ≤ tyle partii", type: "number", default: 5, min: 0, step: 1 },
+    { key: "bbMode", label: "Bee Bread: reset", type: "select", default: "peak",
+      options: [["off", "nie rób"], ["peak", "na szczycie tempa (bez zbierania)"], ["harvest", "budowa → zbieranie pollenu → reset"]] },
+    { key: "bbPatience", label: "Szczyt tempa: ile partii z rzędu poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
+    { key: "bbTier", label: "Bee Bread: tier od razu, gdy dostępny", type: "bool", default: true },
     { key: "drone", label: "Rotuj: drony", type: "bool", default: true },
     { key: "worker", label: "Rotuj: robotnice", type: "bool", default: true },
     { key: "queen", label: "Rotuj: królowe", type: "bool", default: true },
@@ -59,37 +65,82 @@ export const pollenLoop = {
   available: g => g.layerActive("bpl") && Boolean(window.player?.bpl),
   run(ctx) {
     const P = window.player, D = window.Decimal, st = ctx.state, bpl = P.bpl;
-    const { bought, cheapest } = ctx.p.upgrades ? buyPollenUpgrades() : { bought: 0, cheapest: null };
-    if (bought) ctx.did(bought);
-    if (!ctx.p.convert) { ctx.status(`kupiono ulepszeń: ${bought}`); return; }
 
-    // Kiedy konwertować: tuż przed końcem bieżącej partii (timer), albo co X s, gdy pollen leci na sekundę.
+    // Tier Bee Bread — zawsze, gdy tylko dostępny.
+    const BBC = window.layers.bb?.clickables;
+    if (ctx.p.bbTier && BBC?.[12]?.canClick?.call(BBC[12])) {
+      BBC[12].onClick.call(BBC[12]);
+      ctx.did(); ctx.log(`tier Bee Bread → ${window.format(P.bb.breadTier)}`);
+      st.phase = "build"; st.cycleT = 0; st.bestR = 0; st.below = 0;
+    }
+    const bbOn = ctx.p.bbMode !== "off" && BBC?.[11];
+    st.phase ??= "build"; st.cycleT ??= 0;
+    const harvesting = bbOn && ctx.p.bbMode === "harvest" && st.phase === "harvest";
+
+    // W fazie zbierania nie kupujemy ulepszeń Pollen — reset BB i tak je zabierze.
+    const { bought, cheapest } = ctx.p.upgrades && !harvesting ? buyPollenUpgrades() : { bought: 0, cheapest: null };
+    if (bought) ctx.did(bought);
+    if (!ctx.p.convert && !bbOn) { ctx.status(`kupiono ulepszeń: ${bought}`); return; }
+
+    // Moment decyzji: tuż przed końcem bieżącej partii (timer), albo co X s, gdy pollen leci na sekundę.
     const perSec = H("al", 112);
     const batch = new D(bpl.pollenGain);
     let due, left;
     if (!perSec) {
       left = new D(bpl.pollenTimerMax).sub(bpl.pollenTimer).toNumber();
       due = left <= ctx.p.lead;
-      // ta sama partia: nie konwertujemy drugi raz, zanim nie przyjdzie nowa
       if (due && st.doneAt !== undefined && Number(bpl.pollenTimer) >= st.doneAt) due = false;
       if (!due && st.doneAt !== undefined && Number(bpl.pollenTimer) < st.doneAt) st.doneAt = undefined;
     } else {
       left = ctx.p.everySec - (Date.now() - (st.lastConv || 0)) / 1000;
       due = left <= 0;
     }
+    const tag = bbOn ? (harvesting ? "[zbieranie] " : "[budowa] ") : "";
     if (!due) {
-      ctx.status(`pollen ${window.format(bpl.pollen)} · konwersja za ${Math.max(0, left).toFixed(1)} s` + (bought ? ` · kupiono ulepszeń: ${bought}` : ""));
+      ctx.status(`${tag}pollen ${window.format(bpl.pollen)} · decyzja za ${Math.max(0, left).toFixed(1)} s` + (bought ? ` · kupiono ulepszeń: ${bought}` : ""));
       return;
     }
+    const markDone = () => { if (!perSec) st.doneAt = Number(bpl.pollenTimer); else st.lastConv = Date.now(); };
+    // czas cyklu liczony w partiach (działa tak samo w grze i w symulacji)
+    st.cycleT += perSec ? ctx.p.everySec : Number(bpl.pollenTimerMax);
+
+    // Bee Bread: tempo cyklu R = przyrost BB/s z resetu teraz / czas cyklu. Budowa trwa, dopóki R rośnie (R liczone z pollenu
+    // jednej partii); po szczycie albo resetujemy („peak”), albo przestajemy konwertować i zbieramy pollen, aż R znów
+    // przestanie rosnąć („harvest”) — przy zysku ~√pollen opłaca się zbierać mniej więcej tyle, ile trwała budowa.
+    if (bbOn) {
+      const can = BBC[11].canClick.call(BBC[11]);
+      const R = can ? new D(P.bb.beeBreadGain).div(st.cycleT).toNumber() : 0;
+      st.bestR ??= 0; st.below ??= 0;
+      if (R > st.bestR) { st.bestR = R; st.below = 0; } else if (can) st.below++;
+      const need = st.phase === "harvest" ? 1 : ctx.p.bbPatience;
+      const peaked = can && st.bestR > 0 && st.below >= need;
+      const resetBB = () => {
+        const g = new D(P.bb.beeBreadGain);
+        BBC[11].onClick.call(BBC[11]);
+        ctx.did(); ctx.log(`reset Bee Bread: +${window.format(g)} BB/s po ${st.cycleT.toFixed(0)} s cyklu`);
+        st.phase = "build"; st.cycleT = 0; st.bestR = 0; st.below = 0; markDone();
+        ctx.status(`reset Bee Bread: +${window.format(g)} BB/s`);
+      };
+      if (peaked && (ctx.p.bbMode === "peak" || st.phase === "harvest")) { resetBB(); return; }
+      if (peaked && ctx.p.bbMode === "harvest" && st.phase === "build") {
+        st.phase = "harvest"; st.below = 0; markDone();
+        ctx.log("Bee Bread: koniec budowy, zbieram pollen");
+        ctx.status(`[zbieranie] start · reset dałby +${window.format(P.bb.beeBreadGain)} BB/s`);
+        return;
+      }
+      if (harvesting) { markDone(); ctx.status(`[zbieranie] pollen ${window.format(bpl.pollen)} · reset dałby +${window.format(P.bb.beeBreadGain)} BB/s`); return; }
+      if (!ctx.p.convert) { markDone(); return; }
+    }
+
     if (cheapest && ctx.p.saveForN > 0 && cheapest.cost.lte(batch.mul(ctx.p.saveForN)) && new D(bpl.pollen).lt(cheapest.cost)) {
-      if (!perSec) st.doneAt = Number(bpl.pollenTimer); else st.lastConv = Date.now();
-      ctx.status(`zbieram na ulepszenie: ${window.format(bpl.pollen)} / ${window.format(cheapest.cost)}`);
+      markDone();
+      ctx.status(`${tag}zbieram na ulepszenie: ${window.format(bpl.pollen)} / ${window.format(cheapest.cost)}`);
       return;
     }
     const T = window.tmp.bpl.clickables, L = window.layers.bpl.clickables;
     const ok = ROLES.filter(r => ctx.p[r.key] !== false && !(ctx.p.skipAuto && r.auto())
       && T[r.id]?.unlocked !== false && L[r.id]?.canClick?.call(L[r.id]));
-    if (!ok.length) { ctx.status("nic do konwersji (wszystko zautomatyzowane albo za mało pollenu)"); return; }
+    if (!ok.length) { markDone(); ctx.status(`${tag}nic do konwersji`); return; }
     const idx = st.next ?? 0;
     let pick = null;
     for (let k = 0; k < ROLES.length && !pick; k++) {
@@ -99,26 +150,12 @@ export const pollenLoop = {
     const gain = new D(P.bpl.roles[pick.key].gain);
     if (ctx.click("bpl", pick.id, { refresh: true })) {
       st.next = (ROLES.indexOf(pick) + 1) % ROLES.length;
-      if (!perSec) st.doneAt = Number(bpl.pollenTimer); else st.lastConv = Date.now();
+      markDone();
       ctx.did();
-      ctx.status(`+${window.format(gain)} ${pick.label}` + (bought ? ` · kupiono ulepszeń: ${bought}` : ""));
+      ctx.status(`${tag}+${window.format(gain)} ${pick.label}` + (bought ? ` · kupiono ulepszeń: ${bought}` : ""));
     }
   },
 };
-
-// Nectar: łańcuch resetów (pszczoły → α → β → γ → δ → …). Każdy reset zeruje niższe poziomy, więc robimy klasyczną
-// regułę „resetuj, gdy zysk ≥ R × to, co już masz na tym poziomie” — od najwyższego poziomu w dół, jeden reset na takt.
-const NECTAR = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
-const NECTAR_SYM = ["α", "β", "γ", "δ", "ε", "ζ"];
-// Poziomy, które gra już sama generuje (pasywny przyrost) — ich resetów nie klikamy.
-const NECTAR_AUTO = [
-  () => H("al", 203),
-  () => H("al", 206) && H("ne", 103),
-  () => H("al", 209) && H("ne", 203),
-  () => H("al", 212) && H("ne", 303),
-  () => H("al", 221) && H("ne", 403),
-  () => H("n", 92),
-];
 
 export const nectarLoop = {
   id: "nectar-loop",
