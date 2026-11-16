@@ -53,6 +53,7 @@ export const pollenLoop = {
     { key: "saveForN", label: "Zbieraj na ulepszenie, jeśli kosztuje ≤ tyle partii", type: "number", default: 5, min: 0, step: 1 },
     { key: "bbMode", label: "Bee Bread: reset", type: "select", default: "peak",
       options: [["off", "nie rób"], ["peak", "na szczycie tempa cyklu"]] },
+    { key: "bbJump", label: "Bee Bread: reset od razu, gdy da ≥ tyle × obecne BB/s (0 = wyłącz)", type: "number", default: 3, min: 0, step: 1 },
     { key: "bbPatience", label: "Szczyt tempa: ile partii z rzędu poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
     { key: "bbTier", label: "Bee Bread: tier od razu, gdy dostępny", type: "bool", default: true },
     { key: "drone", label: "Rotuj: drony", type: "bool", default: true },
@@ -112,7 +113,10 @@ export const pollenLoop = {
       st.bestR ??= 0; st.below ??= 0;
       if (R > st.bestR) { st.bestR = R; st.below = 0; } else if (can) st.below++;
       const need = st.phase === "harvest" ? 1 : ctx.p.bbPatience;
-      const peaked = can && st.bestR > 0 && st.below >= need;
+      // Druga reguła: reset, gdy dałby ≥ X × obecne BB/s (BB napędza resztę, więc duży skok opłaca się od razu,
+      // nawet jeśli tempo cyklu jeszcze rośnie — np. +2500/s przy obecnych 0,01/s).
+      const jump = can && ctx.p.bbJump > 0 && new D(P.bb.beeBreadGain).gte(new D(P.bb.beeBreadPerSecond).mul(ctx.p.bbJump)) && new D(P.bb.beeBreadGain).gt(0);
+      const peaked = (can && st.bestR > 0 && st.below >= need) || jump;
       const resetBB = () => {
         const g = new D(P.bb.beeBreadGain);
         BBC[11].onClick.call(BBC[11]);
