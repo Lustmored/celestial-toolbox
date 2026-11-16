@@ -1,27 +1,55 @@
-// Hive (β): Pollen. Po każdym przyroście pollenu: kupuje dostępne ulepszenia Pollen, potem konwertuje pollen
-// w pszczoły, rotując rodzaj przy każdej konwersji. Klika te same przyciski co gracz.
+// Hive (β): Pollen. Kupuje dostępne ulepszenia Pollen, a konwersję pollen → pszczoły robi tuż przed nadejściem
+// następnej partii pollenu (pasywny przyrost pszczół liczy się od aktualnego pollenu, więc trzymamy go jak najdłużej).
+// Rodzaje, które gra już sama generuje, są pomijane. Klika te same przyciski co gracz.
 
+const H = (l, id) => window.hasUpgrade(l, id);
 const ROLES = [
-  { id: 11, key: "drone", label: "drony" },
-  { id: 12, key: "worker", label: "robotnice" },
-  { id: 13, key: "queen", label: "królowe" },
-  { id: 14, key: "empress", label: "cesarzowe" },
-  { id: 15, key: "mutated", label: "mutanty" },
+  { id: 11, key: "drone", label: "drony", auto: () => H("al", 103) },
+  { id: 12, key: "worker", label: "robotnice", auto: () => H("al", 106) && H("bpl", 13) },
+  { id: 13, key: "queen", label: "królowe", auto: () => H("al", 109) && H("bpl", 16) },
+  { id: 14, key: "empress", label: "cesarzowe", auto: () => H("al", 124) },
+  { id: 15, key: "mutated", label: "mutanty", auto: () => H("n", 92) },
 ];
+
+function buyPollenUpgrades() {
+  const D = window.Decimal, bpl = window.player.bpl;
+  let bought = 0, cheapest = null;
+  for (let guard = 0; guard < 50; guard++) {
+    let best = null;
+    for (const id of Object.keys(window.layers.bpl.upgrades || {})) {
+      if (isNaN(id)) continue;
+      const t = window.tmp.bpl.upgrades[id];
+      if (!t || !t.unlocked || H("bpl", id)) continue;
+      const cost = new D(t.cost);
+      if (!best || cost.lt(best.cost)) best = { id, cost };
+    }
+    cheapest = best;
+    if (!best || new D(bpl.pollen).lt(best.cost)) break;
+    window.buyUpgrade("bpl", best.id);
+    if (!H("bpl", best.id)) break;
+    bought++;
+    window.updateTemp?.();
+  }
+  return { bought, cheapest };
+}
 
 export const pollenLoop = {
   id: "pollen-loop",
   name: "Pollen: ulepszenia + konwersja (rotacja)",
   group: "Hive",
-  every: 0.1,
+  every: 0.05,
   description:
-    "Po każdym przyroście pollenu kupuje wszystkie dostępne ulepszenia Pollen, a potem konwertuje pollen w pszczoły, " +
-    "za każdym razem w kolejny dostępny rodzaj (drony → robotnice → królowe → …). Jeśli najtańsze niekupione ulepszenie " +
-    "kosztuje nie więcej niż podaną liczbę przyrostów, makro wstrzymuje konwersję i zbiera na nie (0 = nigdy nie zbieraj).",
+    "Kupuje dostępne ulepszenia Pollen, a pollen konwertuje w pszczoły tuż przed nadejściem następnej partii pollenu — " +
+    "do tego czasu pollen leży i napędza pasywny przyrost pszczół. Przy każdej konwersji bierze kolejny rodzaj " +
+    "(drony → robotnice → królowe → …), pomijając te, które gra już generuje sama. Jeśli najtańsze niekupione ulepszenie " +
+    "kosztuje nie więcej niż podaną liczbę partii, zamiast konwertować zbiera na nie (0 = nigdy).",
   params: [
     { key: "upgrades", label: "Kupuj ulepszenia Pollen", type: "bool", default: true },
     { key: "convert", label: "Konwertuj pollen w pszczoły", type: "bool", default: true },
-    { key: "saveForN", label: "Zbieraj na ulepszenie, jeśli kosztuje ≤ tyle przyrostów", type: "number", default: 5, min: 0, step: 1 },
+    { key: "skipAuto", label: "Pomijaj rodzaje generowane automatycznie", type: "bool", default: true },
+    { key: "lead", label: "Konwertuj tyle sekund przed partią", type: "number", default: 0.15, min: 0.05, step: 0.05 },
+    { key: "everySec", label: "Bez partii (pollen na sekundę): konwertuj co (s)", type: "number", default: 5, min: 0.5, step: 0.5 },
+    { key: "saveForN", label: "Zbieraj na ulepszenie, jeśli kosztuje ≤ tyle partii", type: "number", default: 5, min: 0, step: 1 },
     { key: "drone", label: "Rotuj: drony", type: "bool", default: true },
     { key: "worker", label: "Rotuj: robotnice", type: "bool", default: true },
     { key: "queen", label: "Rotuj: królowe", type: "bool", default: true },
@@ -31,45 +59,38 @@ export const pollenLoop = {
   available: g => g.layerActive("bpl") && Boolean(window.player?.bpl),
   run(ctx) {
     const P = window.player, D = window.Decimal, st = ctx.state, bpl = P.bpl;
-    const pollen = new D(bpl.pollen);
-    const last = st.last !== undefined ? new D(st.last) : null;
-    st.last = pollen.toString();
-    if (last === null || !pollen.gt(last)) return; // czekamy na przyrost
-    const inc = pollen.sub(last);
+    const { bought, cheapest } = ctx.p.upgrades ? buyPollenUpgrades() : { bought: 0, cheapest: null };
+    if (bought) ctx.did(bought);
+    if (!ctx.p.convert) { ctx.status(`kupiono ulepszeń: ${bought}`); return; }
 
-    // 1. Ulepszenia Pollen (najtańsze najpierw, aż nic nie da się kupić)
-    let bought = 0, cheapest = null;
-    if (ctx.p.upgrades) {
-      for (let guard = 0; guard < 50; guard++) {
-        let best = null;
-        for (const id of Object.keys(window.layers.bpl.upgrades || {})) {
-          if (isNaN(id)) continue;
-          const t = window.tmp.bpl.upgrades[id];
-          if (!t || !t.unlocked || window.hasUpgrade("bpl", id)) continue;
-          const cost = new D(t.cost);
-          if (!best || cost.lt(best.cost)) best = { id, cost };
-        }
-        cheapest = best;
-        if (!best || new D(bpl.pollen).lt(best.cost)) break;
-        window.buyUpgrade("bpl", best.id);
-        if (!window.hasUpgrade("bpl", best.id)) break;
-        bought++;
-        window.updateTemp?.();
-      }
+    // Kiedy konwertować: tuż przed końcem bieżącej partii (timer), albo co X s, gdy pollen leci na sekundę.
+    const perSec = H("al", 112);
+    const batch = new D(bpl.pollenGain);
+    let due, left;
+    if (!perSec) {
+      left = new D(bpl.pollenTimerMax).sub(bpl.pollenTimer).toNumber();
+      due = left <= ctx.p.lead;
+      // ta sama partia: nie konwertujemy drugi raz, zanim nie przyjdzie nowa
+      if (due && st.doneAt !== undefined && Number(bpl.pollenTimer) >= st.doneAt) due = false;
+      if (!due && st.doneAt !== undefined && Number(bpl.pollenTimer) < st.doneAt) st.doneAt = undefined;
+    } else {
+      left = ctx.p.everySec - (Date.now() - (st.lastConv || 0)) / 1000;
+      due = left <= 0;
     }
-
-    // 2. Konwersja z rotacją rodzajów
-    if (!ctx.p.convert) { if (bought) ctx.did(bought); ctx.status(`kupiono ulepszeń: ${bought}`); return; }
-    if (cheapest && ctx.p.saveForN > 0 && cheapest.cost.lte(inc.mul(ctx.p.saveForN)) && new D(bpl.pollen).lt(cheapest.cost)) {
-      if (bought) ctx.did(bought);
+    if (!due) {
+      ctx.status(`pollen ${window.format(bpl.pollen)} · konwersja za ${Math.max(0, left).toFixed(1)} s` + (bought ? ` · kupiono ulepszeń: ${bought}` : ""));
+      return;
+    }
+    if (cheapest && ctx.p.saveForN > 0 && cheapest.cost.lte(batch.mul(ctx.p.saveForN)) && new D(bpl.pollen).lt(cheapest.cost)) {
+      if (!perSec) st.doneAt = Number(bpl.pollenTimer); else st.lastConv = Date.now();
       ctx.status(`zbieram na ulepszenie: ${window.format(bpl.pollen)} / ${window.format(cheapest.cost)}`);
       return;
     }
     const T = window.tmp.bpl.clickables, L = window.layers.bpl.clickables;
-    const ok = ROLES.filter(r => ctx.p[r.key] !== false && T[r.id]?.unlocked !== false && L[r.id]?.canClick?.call(L[r.id]));
-    if (!ok.length) { if (bought) ctx.did(bought); ctx.status("brak konwersji do zrobienia"); return; }
+    const ok = ROLES.filter(r => ctx.p[r.key] !== false && !(ctx.p.skipAuto && r.auto())
+      && T[r.id]?.unlocked !== false && L[r.id]?.canClick?.call(L[r.id]));
+    if (!ok.length) { ctx.status("nic do konwersji (wszystko zautomatyzowane albo za mało pollenu)"); return; }
     const idx = st.next ?? 0;
-    // pierwszy dostępny rodzaj w kolejności rotacji, zaczynając od „następnego”
     let pick = null;
     for (let k = 0; k < ROLES.length && !pick; k++) {
       const r = ROLES[(idx + k) % ROLES.length];
@@ -78,8 +99,8 @@ export const pollenLoop = {
     const gain = new D(P.bpl.roles[pick.key].gain);
     if (ctx.click("bpl", pick.id, { refresh: true })) {
       st.next = (ROLES.indexOf(pick) + 1) % ROLES.length;
-      st.last = new D(bpl.pollen).toString();
-      ctx.did(bought + 1);
+      if (!perSec) st.doneAt = Number(bpl.pollenTimer); else st.lastConv = Date.now();
+      ctx.did();
       ctx.status(`+${window.format(gain)} ${pick.label}` + (bought ? ` · kupiono ulepszeń: ${bought}` : ""));
     }
   },
@@ -89,6 +110,15 @@ export const pollenLoop = {
 // regułę „resetuj, gdy zysk ≥ R × to, co już masz na tym poziomie” — od najwyższego poziomu w dół, jeden reset na takt.
 const NECTAR = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
 const NECTAR_SYM = ["α", "β", "γ", "δ", "ε", "ζ"];
+// Poziomy, które gra już sama generuje (pasywny przyrost) — ich resetów nie klikamy.
+const NECTAR_AUTO = [
+  () => H("al", 203),
+  () => H("al", 206) && H("ne", 103),
+  () => H("al", 209) && H("ne", 203),
+  () => H("al", 212) && H("ne", 303),
+  () => H("al", 221) && H("ne", 403),
+  () => H("n", 92),
+];
 
 export const nectarLoop = {
   id: "nectar-loop",
@@ -98,10 +128,11 @@ export const nectarLoop = {
   description:
     "Kupuje dostępne ulepszenia Nectar, a potem robi reset na najwyższym poziomie, na którym zysk jest co najmniej " +
     "R razy większy od tego, co już na nim masz (domyślnie R = 0,25 — najlepsze w testach; 1 = reset podwaja stan). Gdy na danym poziomie masz 0, " +
-    "resetuje od razu, jak tylko się da. Jeden reset na takt, od góry w dół.",
+    "resetuje od razu, jak tylko się da. Jeden reset na takt, od góry w dół. Poziomy, które gra już generuje sama, są pomijane.",
   params: [
     { key: "upgrades", label: "Kupuj ulepszenia Nectar", type: "bool", default: true },
     { key: "ratio2", label: "R: resetuj, gdy zysk ≥ R × stan", type: "number", default: 0.25, min: 0.05, step: 0.05 },
+    { key: "skipAuto", label: "Pomijaj poziomy generowane automatycznie", type: "bool", default: true },
     { key: "lowerFirst", label: "Ile resetów niższego poziomu przed resetem wyższego", type: "number", default: 5, min: 1, step: 1 },
     { key: "minGap2", label: "Min. odstęp między resetami (s)", type: "number", default: 0.1, min: 0.05, step: 0.05 },
     { key: "maxTier", label: "Najwyższy poziom do resetowania (1 = tylko α)", type: "number", default: 6, min: 1, max: 6, step: 1 },
@@ -129,11 +160,13 @@ export const nectarLoop = {
     for (let k = Math.min(6, ctx.p.maxTier); k >= 1; k--) {
       const key = NECTAR[k - 1], c = L[k];
       if (!c || !ne[key] || T[k]?.unlocked === false || !c.canClick.call(c)) continue;
+      if (ctx.p.skipAuto && NECTAR_AUTO[k - 1]()) continue;
       const gain = new D(ne[key].gain), have = new D(ne[key].amount);
       if (gain.lte(0) || gain.lt(have.mul(ctx.p.ratio2))) continue;
       // Wyższy poziom dopiero po kilku resetach poziomu niżej (empirycznie dużo wydajniej niż od razu po jednym).
       const cnt = ctx.state.cnt || (ctx.state.cnt = {});
-      if (k > 1 && (cnt[k - 1] || 0) < ctx.p.lowerFirst) continue;
+      // (gdy niższy poziom jest automatyczny, nie klikamy go wcale — wtedy nie czekamy na jego resety)
+      if (k > 1 && !(ctx.p.skipAuto && NECTAR_AUTO[k - 2]()) && (cnt[k - 1] || 0) < ctx.p.lowerFirst) continue;
       if (Date.now() - (ctx.state.lastReset || 0) < ctx.p.minGap2 * 1000) { ctx.status(`czekam na odstęp między resetami`); return; }
       ctx.state.lastReset = Date.now();
       { const cnt = ctx.state.cnt || (ctx.state.cnt = {}); cnt[k] = (cnt[k] || 0) + 1; for (let j = 1; j < k; j++) cnt[j] = 0; }
