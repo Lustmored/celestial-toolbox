@@ -184,6 +184,7 @@ export const nectarLoop = {
     { key: "upgrades", label: "Kupuj ulepszenia Nectar", type: "bool", default: true },
     { key: "ratio2", label: "R: resetuj, gdy zysk ≥ R × stan", type: "number", default: 0.25, min: 0.05, step: 0.05 },
     { key: "skipAuto", label: "Pomijaj poziomy generowane automatycznie", type: "bool", default: true },
+    { key: "researchPause", label: "Wstrzymuj resety, gdy do następnego badania Hive brakuje ≤ tyle sekund produkcji pszczół (0 = nie)", type: "number", default: 60, min: 0, step: 10 },
     { key: "cellMode", label: "Honey-cells: reset", type: "select", default: "peak",
       options: [["off", "nie rób"], ["peak", "na szczycie tempa cyklu"]] },
     { key: "cellPatience", label: "Honey-cells: szczyt = tyle sekund poniżej najlepszego tempa", type: "number", default: 5, min: 1, step: 1 },
@@ -211,6 +212,25 @@ export const nectarLoop = {
         window.updateTemp?.();
       }
     }
+    // Badania Hive kosztują pszczoły, a każdy reset nektaru (i Honey) zeruje pszczoły. Gdy następne badanie jest
+    // w zasięgu ≤ N sekund produkcji przy obecnym BPS, wstrzymujemy resety, aż pszczoły się uzbierają, i kupujemy je.
+    // Zanim to nastąpi, normalne resety podbijają nektar (a z nim BPS) — dokładnie „dużo w γ, potem pauza”.
+    if (ctx.p.researchPause > 0 && !window.hasMilestone?.("n", 16)) {
+      const r = nextResearch();
+      if (r) {
+        if (r.affordable) { const n = buyResearch(); if (n) { ctx.did(n); ctx.log(`badania Hive: +${n}`); } }
+        const r2 = nextResearch();
+        if (r2 && !r2.affordable) {
+          const bps = new D(P.bee.bps);
+          const wait = bps.gt(0) ? r2.cost.sub(P.bee.bees).div(bps).toNumber() : Infinity;
+          if (wait <= ctx.p.researchPause) {
+            ctx.status(`pauza na badanie Hive: ${window.format(P.bee.bees)} / ${window.format(r2.cost)} pszczół (~${Math.ceil(wait)} s)`);
+            return;
+          }
+        }
+      }
+    }
+
     // Honey: ulepszenia (jeśli gra nie kupuje ich sama) i reset za honey-cells na szczycie tempa cyklu
     // (tempo = honey-cells z resetu teraz ÷ czas od poprzedniego resetu; próbka co 1 s).
     if (ctx.p.honeyUpg && window.layers.ho && !(H("al", 218) && P.bee.path == 2)) {
@@ -298,6 +318,38 @@ export const flowerPicker = {
   },
 };
 
+
+/** Najtańsze niekupione (odblokowane, poniżej limitu) badanie Hive: {id, cost, affordable}. */
+function nextResearch() {
+  const D = window.Decimal, B = window.layers.bee?.buyables;
+  if (!B) return null;
+  let best = null;
+  for (const id of Object.keys(B)) {
+    if (isNaN(id)) continue;
+    const b = B[id], t = window.tmp.bee.buyables[id];
+    if (!t || !t.unlocked) continue;
+    if (b.purchaseLimit && window.getBuyableAmount("bee", id).gte(b.purchaseLimit.call(b))) continue;
+    const cost = new D(b.cost.call(b));
+    if (!best || cost.lt(best.cost)) best = { id, cost };
+  }
+  if (best) best.affordable = new D(window.player.bee.bees).gte(best.cost);
+  return best;
+}
+
+/** Kupuje badania Hive, najtańsze najpierw, aż nic nie da się kupić. Zwraca liczbę zakupów. */
+function buyResearch() {
+  let n = 0;
+  for (let guard = 0; guard < 300; guard++) {
+    const r = nextResearch();
+    if (!r || !r.affordable) break;
+    const before = window.getBuyableAmount("bee", r.id);
+    window.buyBuyable("bee", r.id);
+    if (!window.getBuyableAmount("bee", r.id).gt(before)) break;
+    n++;
+  }
+  return n;
+}
+
 // Hive research (warstwa bee): kupuje dostępne badania za pszczoły, najtańsze najpierw, aż nic nie da się kupić.
 export const hiveResearch = {
   id: "hive-research",
@@ -310,26 +362,7 @@ export const hiveResearch = {
   available: g => g.layerActive("bee") && Boolean(window.layers?.bee?.buyables),
   run(ctx) {
     if (window.hasMilestone?.("n", 16)) { ctx.status("gra kupuje badania sama"); return; }
-    const D = window.Decimal, B = window.layers.bee.buyables;
-    let n = 0;
-    for (let guard = 0; guard < 300; guard++) {
-      let best = null;
-      for (const id of Object.keys(B)) {
-        if (isNaN(id)) continue;
-        const b = B[id], t = window.tmp.bee.buyables[id];
-        if (!t || !t.unlocked) continue;
-        const amt = window.getBuyableAmount("bee", id);
-        if (b.purchaseLimit && amt.gte(b.purchaseLimit.call(b))) continue;
-        const cost = new D(b.cost.call(b));
-        if (!new D(b.currency.call(b)).gte(cost)) continue;
-        if (!best || cost.lt(best.cost)) best = { id, cost };
-      }
-      if (!best) break;
-      const before = window.getBuyableAmount("bee", best.id);
-      window.buyBuyable("bee", best.id);
-      if (!window.getBuyableAmount("bee", best.id).gt(before)) break;
-      n++;
-    }
+    const n = buyResearch();
     if (n) { ctx.did(n); ctx.log(`kupiono badań: ${n}`); }
     ctx.status(`badania łącznie: ${window.format(window.player.bee.totalResearch)}` + (n ? ` · teraz +${n}` : ""));
   },
