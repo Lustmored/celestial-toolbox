@@ -223,7 +223,11 @@ export const nectarLoop = {
     //  - pauzę próbujemy już wtedy, gdy przy STAŁYM BPS brakowałoby ≤ N × „próba” sekund,
     //  - w trakcie mierzymy tempo wzrostu BPS (g na sekundę) i liczymy czas z uwzględnieniem wzrostu:
     //    pszczoły(t) = pszczoły + BPS·(gᵗ − 1)/ln g; jeśli i tak wychodzi > N s, przerywamy pauzę na 30 s.
-    if (ctx.p.researchPause > 0 && !window.hasMilestone?.("n", 16)) {
+    // Duży skok honey-cells ma pierwszeństwo przed pauzą na badanie (inaczej seria pauz potrafi blokować reset Honey bardzo długo).
+    const HC0 = window.layers.ho?.clickables?.[1];
+    const honeyJump = ctx.p.cellMode === "peak" && ctx.p.cellJump > 0 && HC0 && window.tmp.ho?.layerShown && HC0.canClick.call(HC0)
+      && new D(P.ho.cellGain).gt(0) && new D(P.ho.cellGain).gte(new D(P.ho.cell).mul(ctx.p.cellJump));
+    if (ctx.p.researchPause > 0 && !window.hasMilestone?.("n", 16) && !honeyJump) {
       const rs = ctx.state.rp || (ctx.state.rp = { active: false, until: 0 });
       const now = ctx.gameTime ? ctx.gameTime() : Date.now() / 1000;
       const r = nextResearch();
@@ -238,6 +242,7 @@ export const nectarLoop = {
         const bps = new D(P.bee.bps), need = r2.cost.sub(P.bee.bees);
         const lin = bps.gt(0) ? need.div(bps).toNumber() : Infinity;
         if (!rs.active && now >= rs.until && lin <= ctx.p.researchPause * ctx.p.researchProbe) {
+          if (!(now - (rs.lastActive ?? -1e9) <= 10)) rs.since = now; // nowa seria pauz
           Object.assign(rs, { active: true, start: now, t: now, bps: bps.toNumber(), g: 1 });
         }
         if (rs.active) {
@@ -250,7 +255,11 @@ export const nectarLoop = {
           const eta = lg > 1e-6 && bps.gt(0)
             ? Math.log(1 + need.toNumber() * lg / bps.toNumber()) / lg
             : lin;
-          if (now - rs.start >= 3 && !(eta <= ctx.p.researchPause)) {
+          rs.since ??= rs.start; rs.lastActive = now;
+          if (now - rs.since > ctx.p.researchPause * 3) { // seria pauz trwa za długo — dajmy resetom 30 s
+            rs.active = false; rs.until = now + 30; rs.since = undefined;
+            ctx.log("seria pauz na badania za długa — 30 s resetów");
+          } else if (now - rs.start >= 3 && !(eta <= ctx.p.researchPause)) {
             rs.active = false; rs.until = now + 30;
             ctx.log(`pauza na badanie przerwana (prognoza ${isFinite(eta) ? Math.ceil(eta) + " s" : "∞"})`);
           } else {
