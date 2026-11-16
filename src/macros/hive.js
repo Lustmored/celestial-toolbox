@@ -43,8 +43,7 @@ export const pollenLoop = {
     "do tego czasu pollen leży i napędza pasywny przyrost pszczół. Przy każdej konwersji bierze kolejny rodzaj " +
     "(drony → robotnice → królowe → …), pomijając te, które gra już generuje sama. Jeśli najtańsze niekupione ulepszenie " +
     "kosztuje nie więcej niż podaną liczbę partii, zamiast konwertować zbiera na nie (0 = nigdy). " +
-    "Bee Bread: reset na szczycie tempa cyklu (przyrost BB/s z resetu ÷ czas od ostatniego resetu); tryb „zbieranie” " +
-    "po szczycie wstrzymuje konwersje i zbiera pollen do drugiego szczytu (eksperymentalny). Tier BB — od razu, gdy dostępny.",
+    "Bee Bread: reset na szczycie tempa cyklu (przyrost BB/s z resetu ÷ czas od ostatniego resetu). Tier BB — od razu, gdy dostępny.",
   params: [
     { key: "upgrades", label: "Kupuj ulepszenia Pollen", type: "bool", default: true },
     { key: "convert", label: "Konwertuj pollen w pszczoły", type: "bool", default: true },
@@ -53,7 +52,7 @@ export const pollenLoop = {
     { key: "everySec", label: "Bez partii (pollen na sekundę): konwertuj co (s)", type: "number", default: 5, min: 0.5, step: 0.5 },
     { key: "saveForN", label: "Zbieraj na ulepszenie, jeśli kosztuje ≤ tyle partii", type: "number", default: 5, min: 0, step: 1 },
     { key: "bbMode", label: "Bee Bread: reset", type: "select", default: "peak",
-      options: [["off", "nie rób"], ["peak", "na szczycie tempa (bez zbierania)"], ["harvest", "budowa → zbieranie pollenu → reset"]] },
+      options: [["off", "nie rób"], ["peak", "na szczycie tempa cyklu"]] },
     { key: "bbPatience", label: "Szczyt tempa: ile partii z rzędu poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
     { key: "bbTier", label: "Bee Bread: tier od razu, gdy dostępny", type: "bool", default: true },
     { key: "drone", label: "Rotuj: drony", type: "bool", default: true },
