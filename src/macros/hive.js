@@ -184,7 +184,8 @@ export const nectarLoop = {
     { key: "upgrades", label: "Kupuj ulepszenia Nectar", type: "bool", default: true },
     { key: "ratio2", label: "R: resetuj, gdy zysk ≥ R × stan", type: "number", default: 0.25, min: 0.05, step: 0.05 },
     { key: "skipAuto", label: "Pomijaj poziomy generowane automatycznie", type: "bool", default: true },
-    { key: "researchPause", label: "Wstrzymuj resety, gdy do następnego badania Hive brakuje ≤ tyle sekund produkcji pszczół (0 = nie)", type: "number", default: 60, min: 0, step: 10 },
+    { key: "researchPause", label: "Pauza na badanie Hive: maks. czas czekania (s, 0 = nie pauzuj)", type: "number", default: 60, min: 0, step: 10 },
+    { key: "researchProbe", label: "Pauza na badanie: próbuj, gdy przy stałym BPS brakuje ≤ tyle × maks. czasu", type: "number", default: 10, min: 1, step: 1 },
     { key: "cellMode", label: "Honey-cells: reset", type: "select", default: "peak",
       options: [["off", "nie rób"], ["peak", "na szczycie tempa cyklu"]] },
     { key: "cellPatience", label: "Honey-cells: szczyt = tyle sekund poniżej najlepszego tempa", type: "number", default: 5, min: 1, step: 1 },
@@ -212,19 +213,44 @@ export const nectarLoop = {
         window.updateTemp?.();
       }
     }
-    // Badania Hive kosztują pszczoły, a każdy reset nektaru (i Honey) zeruje pszczoły. Gdy następne badanie jest
-    // w zasięgu ≤ N sekund produkcji przy obecnym BPS, wstrzymujemy resety, aż pszczoły się uzbierają, i kupujemy je.
-    // Zanim to nastąpi, normalne resety podbijają nektar (a z nim BPS) — dokładnie „dużo w γ, potem pauza”.
+    // Badania Hive kosztują pszczoły, a każdy reset nektaru (i Honey) zeruje pszczoły. Gdy następne badanie wygląda na
+    // osiągalne, wstrzymujemy resety, aż pszczoły się uzbierają, i kupujemy je. W czasie pauzy BPS szybko rośnie, więc:
+    //  - pauzę próbujemy już wtedy, gdy przy STAŁYM BPS brakowałoby ≤ N × „próba” sekund,
+    //  - w trakcie mierzymy tempo wzrostu BPS (g na sekundę) i liczymy czas z uwzględnieniem wzrostu:
+    //    pszczoły(t) = pszczoły + BPS·(gᵗ − 1)/ln g; jeśli i tak wychodzi > N s, przerywamy pauzę na 30 s.
     if (ctx.p.researchPause > 0 && !window.hasMilestone?.("n", 16)) {
+      const rs = ctx.state.rp || (ctx.state.rp = { active: false, until: 0 });
+      const now = ctx.gameTime ? ctx.gameTime() : Date.now() / 1000;
       const r = nextResearch();
-      if (r) {
-        if (r.affordable) { const n = buyResearch(); if (n) { ctx.did(n); ctx.log(`badania Hive: +${n}`); } }
-        const r2 = nextResearch();
-        if (r2 && !r2.affordable) {
-          const bps = new D(P.bee.bps);
-          const wait = bps.gt(0) ? r2.cost.sub(P.bee.bees).div(bps).toNumber() : Infinity;
-          if (wait <= ctx.p.researchPause) {
-            ctx.status(`pauza na badanie Hive: ${window.format(P.bee.bees)} / ${window.format(r2.cost)} pszczół (~${Math.ceil(wait)} s)`);
+      if (r && r.affordable) {
+        const n = buyResearch();
+        if (n) { ctx.did(n); ctx.log(`badania Hive: +${n}` + (rs.active ? ` po ${(now - rs.start).toFixed(0)} s pauzy` : "")); }
+        rs.active = false;
+      }
+      const r2 = nextResearch();
+      if (!r2 || r2.affordable) rs.active = false;
+      else {
+        const bps = new D(P.bee.bps), need = r2.cost.sub(P.bee.bees);
+        const lin = bps.gt(0) ? need.div(bps).toNumber() : Infinity;
+        if (!rs.active && now >= rs.until && lin <= ctx.p.researchPause * ctx.p.researchProbe) {
+          Object.assign(rs, { active: true, start: now, t: now, bps: bps.toNumber(), g: 1 });
+        }
+        if (rs.active) {
+          if (now - rs.t >= 1) {
+            const b = bps.toNumber();
+            if (rs.bps > 0 && b > 0) rs.g = Math.max(1, Math.pow(b / rs.bps, 1 / (now - rs.t)));
+            rs.t = now; rs.bps = b;
+          }
+          const lg = Math.log(rs.g);
+          const eta = lg > 1e-6 && bps.gt(0)
+            ? Math.log(1 + need.toNumber() * lg / bps.toNumber()) / lg
+            : lin;
+          if (now - rs.start >= 3 && !(eta <= ctx.p.researchPause)) {
+            rs.active = false; rs.until = now + 30;
+            ctx.log(`pauza na badanie przerwana (prognoza ${isFinite(eta) ? Math.ceil(eta) + " s" : "∞"})`);
+          } else {
+            ctx.status(`pauza na badanie Hive: ${window.format(P.bee.bees)} / ${window.format(r2.cost)} pszczół · ` +
+              `BPS ×${rs.g.toFixed(2)}/s · ~${isFinite(eta) ? Math.ceil(eta) : "?"} s`);
             return;
           }
         }
