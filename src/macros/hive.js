@@ -157,19 +157,38 @@ export const pollenLoop = {
   },
 };
 
+// Nectar: łańcuch resetów (pszczoły → α → β → γ → δ → …). Każdy reset zeruje niższe poziomy, więc robimy klasyczną
+// regułę „resetuj, gdy zysk ≥ R × to, co już masz na tym poziomie” — od najwyższego poziomu w dół, jeden reset na takt.
+const NECTAR = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
+const NECTAR_SYM = ["α", "β", "γ", "δ", "ε", "ζ"];
+// Poziomy, które gra już sama generuje (pasywny przyrost) — ich resetów nie klikamy.
+const NECTAR_AUTO = [
+  () => H("al", 203),
+  () => H("al", 206) && H("ne", 103),
+  () => H("al", 209) && H("ne", 203),
+  () => H("al", 212) && H("ne", 303),
+  () => H("al", 221) && H("ne", 403),
+  () => H("n", 92),
+];
+
 export const nectarLoop = {
   id: "nectar-loop",
-  name: "Nectar: ulepszenia + resety",
+  name: "Nectar + Honey: ulepszenia, resety",
   group: "Hive",
   every: 0.1,
   description:
     "Kupuje dostępne ulepszenia Nectar, a potem robi reset na najwyższym poziomie, na którym zysk jest co najmniej " +
     "R razy większy od tego, co już na nim masz (domyślnie R = 0,25 — najlepsze w testach; 1 = reset podwaja stan). Gdy na danym poziomie masz 0, " +
-    "resetuje od razu, jak tylko się da. Jeden reset na takt, od góry w dół. Poziomy, które gra już generuje sama, są pomijane.",
+    "resetuje od razu, jak tylko się da. Jeden reset na takt, od góry w dół. Poziomy, które gra już generuje sama, są pomijane. " +
+    "Honey: kupuje ulepszenia Honey i robi reset za honey-cells na szczycie tempa cyklu (honey-cells z resetu ÷ czas od poprzedniego).",
   params: [
     { key: "upgrades", label: "Kupuj ulepszenia Nectar", type: "bool", default: true },
     { key: "ratio2", label: "R: resetuj, gdy zysk ≥ R × stan", type: "number", default: 0.25, min: 0.05, step: 0.05 },
     { key: "skipAuto", label: "Pomijaj poziomy generowane automatycznie", type: "bool", default: true },
+    { key: "cellMode", label: "Honey-cells: reset", type: "select", default: "peak",
+      options: [["off", "nie rób"], ["peak", "na szczycie tempa cyklu"]] },
+    { key: "cellPatience", label: "Honey-cells: szczyt = tyle sekund poniżej najlepszego tempa", type: "number", default: 5, min: 1, step: 1 },
+    { key: "honeyUpg", label: "Kupuj ulepszenia Honey", type: "bool", default: true },
     { key: "lowerFirst", label: "Ile resetów niższego poziomu przed resetem wyższego", type: "number", default: 5, min: 1, step: 1 },
     { key: "minGap2", label: "Min. odstęp między resetami (s)", type: "number", default: 0.1, min: 0.05, step: 0.05 },
     { key: "maxTier", label: "Najwyższy poziom do resetowania (1 = tylko α)", type: "number", default: 6, min: 1, max: 6, step: 1 },
@@ -193,6 +212,34 @@ export const nectarLoop = {
         window.updateTemp?.();
       }
     }
+    // Honey: ulepszenia (jeśli gra nie kupuje ich sama) i reset za honey-cells na szczycie tempa cyklu
+    // (tempo = honey-cells z resetu teraz ÷ czas od poprzedniego resetu; próbka co 1 s).
+    if (ctx.p.honeyUpg && window.layers.ho && !(H("al", 218) && P.bee.path == 2)) {
+      for (const id of [1, 2, 3, 4, 5, 6]) {
+        if (H("ho", id) || !window.tmp.ho?.upgrades?.[id]?.unlocked) continue;
+        if (window.canAffordUpgrade("ho", id)) { window.buyUpgrade("ho", id); if (H("ho", id)) { ctx.did(); ctx.log(`Honey ${id}`); } }
+      }
+    }
+    const HC = window.layers.ho?.clickables?.[1];
+    if (ctx.p.cellMode === "peak" && HC && window.tmp.ho?.layerShown) {
+      const st = ctx.state, now = ctx.gameTime ? ctx.gameTime() : Date.now() / 1000;
+      st.cellT0 ??= now; st.cellBest ??= 0; st.cellBelow ??= 0;
+      if (now - (st.cellSample ?? 0) >= 1) {
+        st.cellSample = now;
+        const can = HC.canClick.call(HC);
+        const R = can ? new D(P.ho.cellGain).div(Math.max(1, now - st.cellT0)).toNumber() : 0;
+        if (R > st.cellBest) { st.cellBest = R; st.cellBelow = 0; } else if (can) st.cellBelow++;
+        if (can && st.cellBest > 0 && st.cellBelow >= ctx.p.cellPatience) {
+          const g = new D(P.ho.cellGain);
+          HC.onClick.call(HC);
+          ctx.did(); ctx.log(`reset Honey: +${window.format(g)} honey-cells po ${(now - st.cellT0).toFixed(0)} s`);
+          st.cellT0 = now; st.cellBest = 0; st.cellBelow = 0; st.cnt = {};
+          ctx.status(`reset Honey: +${window.format(g)} honey-cells`);
+          return;
+        }
+      }
+    }
+
     const L = window.layers.ne.clickables, T = window.tmp.ne.clickables;
     for (let k = Math.min(6, ctx.p.maxTier); k >= 1; k--) {
       const key = NECTAR[k - 1], c = L[k];
@@ -249,5 +296,42 @@ export const flowerPicker = {
     }
     if (picked) { st.picked = (st.picked || 0) + picked; ctx.did(picked); }
     ctx.status(clicks ? `kwiatów na siatce: ${clicks} · zebrano łącznie: ${st.picked || 0}` : `czekam na kwiaty · zebrano łącznie: ${st.picked || 0}`);
+  },
+};
+
+// Hive research (warstwa bee): kupuje dostępne badania za pszczoły, najtańsze najpierw, aż nic nie da się kupić.
+export const hiveResearch = {
+  id: "hive-research",
+  name: "Hive research: kupowanie",
+  group: "Hive",
+  every: 0.5,
+  description:
+    "Kupuje dostępne badania Hive (za pszczoły), zawsze najtańsze najpierw, aż nic więcej nie da się kupić. " +
+    "Gdy gra sama zacznie je kupować, makro nic nie robi.",
+  available: g => g.layerActive("bee") && Boolean(window.layers?.bee?.buyables),
+  run(ctx) {
+    if (window.hasMilestone?.("n", 16)) { ctx.status("gra kupuje badania sama"); return; }
+    const D = window.Decimal, B = window.layers.bee.buyables;
+    let n = 0;
+    for (let guard = 0; guard < 300; guard++) {
+      let best = null;
+      for (const id of Object.keys(B)) {
+        if (isNaN(id)) continue;
+        const b = B[id], t = window.tmp.bee.buyables[id];
+        if (!t || !t.unlocked) continue;
+        const amt = window.getBuyableAmount("bee", id);
+        if (b.purchaseLimit && amt.gte(b.purchaseLimit.call(b))) continue;
+        const cost = new D(b.cost.call(b));
+        if (!new D(b.currency.call(b)).gte(cost)) continue;
+        if (!best || cost.lt(best.cost)) best = { id, cost };
+      }
+      if (!best) break;
+      const before = window.getBuyableAmount("bee", best.id);
+      window.buyBuyable("bee", best.id);
+      if (!window.getBuyableAmount("bee", best.id).gt(before)) break;
+      n++;
+    }
+    if (n) { ctx.did(n); ctx.log(`kupiono badań: ${n}`); }
+    ctx.status(`badania łącznie: ${window.format(window.player.bee.totalResearch)}` + (n ? ` · teraz +${n}` : ""));
   },
 };
