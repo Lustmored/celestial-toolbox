@@ -80,20 +80,24 @@ export const numbnessLoop = {
         for (let guard = 0; guard < 200; guard++) {
           let best = null;
           for (const id of ids) {
-            const t = window.tmp[layer].buyables[id];
-            if (!t || t.unlocked === false || !t.canAfford) continue;
-            const cost = new Dec(t.cost);
-            const B = L[id]; const have = B.currency ? new Dec(B.currency.call(B)) : null;
-            // perk points nie mnożą się same, więc perki kupujemy do spodu; pozostałe waluty chronimy limitem %
-            if (layer !== "pr" && have && cost.gt(have.mul(ctx.p.a1Pct / 100))) continue;
-            if (!best || cost.lt(best.cost)) best = { id, cost };
+            const B = L[id], t = window.tmp[layer].buyables[id];
+            if (!t || t.unlocked === false || !B.currency || !B.cost) continue;
+            // koszt i waluta liczone na świeżo (tmp bywa nieaktualne w trakcie serii zakupów)
+            const cost = new Dec(B.cost.call(B)), have = new Dec(B.currency.call(B));
+            if (!have.gte(cost) || cost.lte(0)) continue;
+            if (B.purchaseLimit && window.getBuyableAmount(layer, id).gte(B.purchaseLimit.call(B))) continue;
+            // linia oszczędności: do spodu tylko za perk points (liniowe); replicanti, anonymity itd. — max X%
+            const linear = layer === "pr" && B.currency.call(B) === window.player.pr.perkPoints;
+            if (!linear && cost.gt(have.mul(ctx.p.a1Pct / 100))) continue;
+            if (!best || cost.lt(best.cost)) best = { id, cost, B };
           }
           if (!best) break;
           const before = window.getBuyableAmount(layer, best.id);
-          window.buyBuyable(layer, best.id);
+          best.B.buy.call(best.B); // kup jeden poziom, jak kliknięcie
+          const after = new Dec(best.B.currency.call(best.B));
+          if (after.lt(0) || after.isNan?.()) { ctx.log(`STOP: ${layer} ${best.id} zszedł z waluty poniżej zera`); ctx.p.a1Buy = false; break; }
           if (!window.getBuyableAmount(layer, best.id).gt(before)) break;
           bought++;
-          window.updateBuyableTemp?.(layer);
         }
       }
     }
