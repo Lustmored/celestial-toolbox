@@ -56,7 +56,7 @@ export const numbnessLoop = {
     { key: "doubler", label: "Kupuj Numbness Doubler", type: "bool", default: true },
     { key: "reducer", label: "Kupuj Challenge Reducer", type: "bool", default: true },
     { key: "booster", label: "Kupuj Apathy Booster", type: "bool", default: true },
-    { key: "minor", label: "Kupuj Numbness 2–7, gdy kosztują ≤ 1% numbness", type: "bool", default: true },
+    { key: "minor", label: "Kupuj Numbness 2–7 (≤ 1% numbness, bez limitu po wymaksowaniu Doubler/Reducer/Booster)", type: "bool", default: true },
     { key: "reset", label: "Rób reset apathy", type: "bool", default: true },
     { key: "holdAn", label: "Nie resetuj, dopóki nie są kupione wszystkie ulepszenia anonymity (np. XII po Singularity)", type: "bool", default: true },
     { key: "patience", label: "Szczyt tempa: tyle sekund poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
@@ -110,6 +110,10 @@ export const numbnessLoop = {
       }
     }
 
+    const mainMaxed = NUMB_BUYABLES.filter(b => !b.cheap).every(b => {
+      const L = window.layers.fu.buyables[b.id];
+      return L?.purchaseLimit && window.getBuyableAmount("fu", b.id).gte(L.purchaseLimit.call(L));
+    });
     // buyables za numbness: najtańszy dostępny, aż nic nie da się kupić
     for (let guard = 0; guard < 100; guard++) {
       let best = null;
@@ -120,7 +124,8 @@ export const numbnessLoop = {
         if (L.purchaseLimit && window.getBuyableAmount("fu", b.id).gte(L.purchaseLimit.call(L))) continue;
         const cost = new Dec(t.cost);
         if (new Dec(P.fu.numb).lt(cost)) continue;
-        if (b.cheap && cost.gt(new Dec(P.fu.numb).mul(0.01))) continue;
+        // limit 1% obowiązuje tylko, dopóki któryś z głównych buyables (Doubler/Reducer/Booster) jest do dokupienia
+        if (b.cheap && !mainMaxed && cost.gt(new Dec(P.fu.numb).mul(0.01))) continue;
         if (!best || cost.lt(best.cost)) best = { ...b, cost };
       }
       if (!best) break;
