@@ -51,6 +51,7 @@ export const numbnessLoop = {
     { key: "anonymity", label: "Kupuj ulepszenia anonymity", type: "bool", default: true },
     { key: "apathyUpg", label: "Kupuj ulepszenia Apathy", type: "bool", default: true },
     { key: "a1Buy", label: "Kupuj buyables: perki, Repli-Trees, Repli-Grass, Grass-Skip", type: "bool", default: true },
+    { key: "a1Pct", label: "…ale tylko za ≤ tyle % posiadanej waluty na zakup", type: "number", default: 5, min: 0.1, step: 1 },
     { key: "grass", label: "Zbieraj Repli-Grass (najechanie na pola siatki)", type: "bool", default: true },
     { key: "doubler", label: "Kupuj Numbness Doubler", type: "bool", default: true },
     { key: "reducer", label: "Kupuj Challenge Reducer", type: "bool", default: true },
@@ -81,6 +82,8 @@ export const numbnessLoop = {
             const t = window.tmp[layer].buyables[id];
             if (!t || t.unlocked === false || !t.canAfford) continue;
             const cost = new Dec(t.cost);
+            const B = L[id]; const have = B.currency ? new Dec(B.currency.call(B)) : null;
+            if (have && cost.gt(have.mul(ctx.p.a1Pct / 100))) continue; // nie przepalamy mnożnikowej waluty
             if (!best || cost.lt(best.cost)) best = { id, cost };
           }
           if (!best) break;
