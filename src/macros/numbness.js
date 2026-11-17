@@ -59,6 +59,8 @@ export const numbnessLoop = {
     { key: "minor", label: "Kupuj Numbness 2–7 (≤ 1% numbness, bez limitu po wymaksowaniu Doubler/Reducer/Booster)", type: "bool", default: true },
     { key: "reset", label: "Rób reset apathy", type: "bool", default: true },
     { key: "holdAn", label: "Nie resetuj, dopóki nie są kupione wszystkie ulepszenia anonymity (np. XII po Singularity)", type: "bool", default: true },
+    { key: "gsDo", label: "Rób Grass-Skip (eksperymentalne)", type: "bool", default: false },
+    { key: "gsMin", label: "…gdy da co najmniej tyle skipów", type: "number", default: 1, min: 1, step: 1 },
     { key: "gsHold", label: "Po Grass-Skip wstrzymaj resety apathy na (s)", type: "number", default: 120, min: 0, step: 10 },
     { key: "patience", label: "Szczyt tempa: tyle sekund poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
     { key: "minSec", label: "Min. czas runu przed resetem (s)", type: "number", default: 10, min: 1, step: 1 },
@@ -143,6 +145,17 @@ export const numbnessLoop = {
     const gain = new Dec(P.fu.apathyToGet), sec = now - st.t0;
     const C = window.layers.fu.clickables?.[32];
     const can = C && C.canClick.call(C);
+    // Grass-Skip robiony przez makro (opcjonalnie): ten sam przycisk co gracz
+    const GSC = window.layers.gs?.clickables?.[11];
+    if (ctx.p.gsDo && GSC && window.tmp.gs?.layerShown !== false && new Dec(P.gs.grassSkipPause ?? 0).lte(0)
+        && GSC.canClick.call(GSC) && new Dec(P.gs.grassSkipToGet).gte(ctx.p.gsMin)) {
+      const n = new Dec(P.gs.grassSkipToGet);
+      GSC.onClick.call(GSC);
+      ctx.did(); ctx.log(`Grass-Skip +${window.format(n)}`);
+      ctx.status(`Grass-Skip +${window.format(n)}`);
+      return;
+    }
+
     // Grass-Skip (albo inny reset w trakcie runu) zeruje replicanti: apathy z resetu nagle spada. To nie jest „szczyt minął”
     // — zaczynamy śledzić szczyt od nowa (czas runu liczy się dalej), żeby nie zresetować apathy zaraz po GS.
     const gsNow = Number(P.gs?.grassSkip ?? 0);
