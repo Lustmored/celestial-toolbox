@@ -35,13 +35,16 @@ export const numbnessLoop = {
   group: "A1 / Funify",
   every: 0.25,
   description:
-    "Działa tylko w challenge'u Numbness. Po każdym resecie odkupuje Feature I–VII i ulepszenia anonymity, kupuje ulepszenia " +
+    "Działa tylko w challenge'u Numbness. Po każdym resecie odkupuje Feature I–VII i ulepszenia anonymity, kupuje buyables perków, " +
+    "Repli-Trees, Repli-Grass i Grass-Skip, zbiera Repli-Grass, kupuje ulepszenia " +
     "Apathy oraz wybrane buyables za numbness (najtańszy najpierw), a reset apathy robi na szczycie tempa: gdy apathy z resetu " +
     "÷ czas od poprzedniego resetu przez kilka sekund nie przebija najlepszej wartości.",
   params: [
     { key: "features", label: "Odkupuj Feature I–VII", type: "bool", default: true },
     { key: "anonymity", label: "Kupuj ulepszenia anonymity", type: "bool", default: true },
     { key: "apathyUpg", label: "Kupuj ulepszenia Apathy", type: "bool", default: true },
+    { key: "a1Buy", label: "Kupuj buyables: perki, Repli-Trees, Repli-Grass, Grass-Skip", type: "bool", default: true },
+    { key: "grass", label: "Zbieraj Repli-Grass (najechanie na pola siatki)", type: "bool", default: true },
     { key: "doubler", label: "Kupuj Numbness Doubler", type: "bool", default: true },
     { key: "reducer", label: "Kupuj Challenge Reducer", type: "bool", default: true },
     { key: "booster", label: "Kupuj Apathy Booster", type: "bool", default: true },
@@ -57,6 +60,38 @@ export const numbnessLoop = {
     if (ctx.p.features) bought += buyUpgradesOf("cp", [11, 12, 13, 14, 15, 16, 17]);
     if (ctx.p.anonymity && window.layers.an) bought += buyUpgradesOf("an", upgradeIds("an"));
     if (ctx.p.apathyUpg) bought += buyUpgradesOf("fu", upgradeIds("fu", id => id > 100 && id < 200));
+
+    // Automatyzacja tych warstw jest w Numbness wyłączona — kupujemy ich buyables jak gracz (najtańszy najpierw).
+    if (ctx.p.a1Buy) {
+      for (const layer of ["pr", "rt", "rg", "gs"]) {
+        const L = window.layers[layer]?.buyables;
+        if (!L || window.tmp[layer]?.layerShown === false) continue;
+        const ids = Object.keys(L).filter(x => !isNaN(x));
+        for (let guard = 0; guard < 200; guard++) {
+          let best = null;
+          for (const id of ids) {
+            const t = window.tmp[layer].buyables[id];
+            if (!t || t.unlocked === false || !t.canAfford) continue;
+            const cost = new Dec(t.cost);
+            if (!best || cost.lt(best.cost)) best = { id, cost };
+          }
+          if (!best) break;
+          const before = window.getBuyableAmount(layer, best.id);
+          window.buyBuyable(layer, best.id);
+          if (!window.getBuyableAmount(layer, best.id).gt(before)) break;
+          bought++;
+          window.updateBuyableTemp?.(layer);
+        }
+      }
+    }
+    // Repli-Grass rośnie w Numbness tylko przez „zbieranie” — najechanie myszą na pole siatki (onHover gry).
+    if (ctx.p.grass && window.layers.rg?.grid && window.tmp.rg?.layerShown !== false) {
+      const G = window.layers.rg.grid;
+      for (let r = 1; r <= G.rows; r++) for (let c = 1; c <= G.cols; c++) {
+        const id = r * 100 + c;
+        if (new Dec(window.getGridData("rg", id)).gt(1)) G.onHover(window.getGridData("rg", id), id);
+      }
+    }
 
     // buyables za numbness: najtańszy dostępny, aż nic nie da się kupić
     for (let guard = 0; guard < 100; guard++) {
