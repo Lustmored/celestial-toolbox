@@ -38,11 +38,11 @@ function upgradeIds(layer, filter = () => true) {
 
 export const numbnessLoop = {
   id: "numbness-loop",
-  name: "Numbness: resety apathy + zakupy",
+  name: "Numbness/Fear: resety apathy + zakupy",
   group: "A1 / Funify",
   every: 0.25,
   description:
-    "Działa tylko w challenge'u Numbness. Po każdym resecie odkupuje Feature I–VII i ulepszenia anonymity, kupuje buyables perków, " +
+    "Działa w challenge'ach Numbness i Fear (w Fear tylko zakupy A1 i zbieranie Repli-Grass, bez apathy). Po każdym resecie odkupuje Feature I–VII i ulepszenia anonymity, kupuje buyables perków, " +
     "Repli-Trees, Repli-Grass i Grass-Skip, zbiera Repli-Grass, kupuje ulepszenia " +
     "Apathy oraz wybrane buyables za numbness (najtańszy najpierw), a reset apathy robi na szczycie tempa: gdy apathy z resetu " +
     "÷ czas od poprzedniego resetu przez kilka sekund nie przebija najlepszej wartości.",
@@ -65,7 +65,7 @@ export const numbnessLoop = {
     { key: "patience", label: "Szczyt tempa: tyle sekund poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
     { key: "minSec", label: "Min. czas runu przed resetem (s)", type: "number", default: 10, min: 1, step: 1 },
   ],
-  available: () => Boolean(window.player?.fu && window.inChallenge?.("fu", 12)),
+  available: () => Boolean(window.player?.fu && (window.inChallenge?.("fu", 12) || window.inChallenge?.("fu", 11))),
   run(ctx) {
     const P = window.player, Dec = D(), st = ctx.state, now = Date.now() / 1000;
     if (new Dec(P.fu.funifyPause).gt(0)) { ctx.status("reset w toku…"); return; }
@@ -117,6 +117,13 @@ export const numbnessLoop = {
       const L = window.layers.fu.buyables[b.id];
       return L?.purchaseLimit && window.getBuyableAmount("fu", b.id).gte(L.purchaseLimit.call(L));
     });
+    // FEAR: ta sama ręczna automatyzacja A1 (Feature, anonymity, buyables, Repli-Grass), ale bez apathy i numbness.
+    if (!window.inChallenge("fu", 12)) {
+      if (bought) { ctx.did(bought); window.updateTemp?.(); }
+      ctx.status(`FEAR: zakupy A1` + (bought ? ` · kupiono ${bought}` : "") + ` · replicanti ${window.format(P.cp.replicantiPoints)} · GS ${window.formatWhole(P.gs.grassSkip)}`);
+      return;
+    }
+
     // buyables za numbness: najtańszy dostępny, aż nic nie da się kupić
     for (let guard = 0; guard < 100; guard++) {
       let best = null;
