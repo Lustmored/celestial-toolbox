@@ -78,16 +78,28 @@ const Hunter = (() => {
         if (CFG.allowMouse && c.target) { const k = Math.min(1, 300 / (c.tDist || 1)); mouseTo(a, Math.cos(c.aimAng) * c.tDist * k, Math.sin(c.aimAng) * c.tDist * k); }
       },
     },
-    mouse: { // rammers 3 (roll) / 7 (dash): no key input exists; c = heading for the cursor (arena.js 2203-2263)
-      cands: () => ring16,
+    mouse: { // rammers 3 (roll) / 7 (dash): no key input; cand = cursor point [dx, dy] relative to the ship (arena.js 2203-2263)
+      cands(c) {
+        const pts = [];
+        for (const r of [150, 300]) for (const h of ring16) pts.push([Math.cos(h) * r, Math.sin(h) * r]);
+        // Stinger: kursor dokładnie na przewidywanej pozycji celu (dash leci do punktu kursora)
+        for (const e of c.aimTargets || []) for (const lead of [10, 20, 30]) pts.push([e.x + e.vx * lead, e.y + e.vy * lead]);
+        return pts;
+      },
       init: s => ({ x: 0, y: 0, vx: s.vx || 0, vy: s.vy || 0 }),
-      step(q, h, t, c) {
-        if (c.st == 3) { q.vx += Math.cos(h) * c.ms / 5; q.vy += Math.sin(h) * c.ms / 5; }
-        else if (t == 1) { q.vx = Math.cos(h) * 12; q.vy = Math.sin(h) * 12; }
+      step(q, [px, py], t, c) {
+        const h = Math.atan2(py, px);
+        if (c.st == 3) {
+          const sp = Math.min(1, Math.max(0, (Math.hypot(px, py) - 100) / 200));
+          q.vx += Math.cos(h) * sp * c.ms / 5; q.vy += Math.sin(h) * sp * c.ms / 5;
+        } else if (t == 1) { // dash: prędkość max(12, dystans/30) w stronę punktu, potem wyhamowanie
+          const sp = Math.max(12, Math.hypot(px, py) / 30);
+          q.vx = Math.cos(h) * sp; q.vy = Math.sin(h) * sp;
+        }
         q.x += q.vx; q.y += q.vy; q.vx *= c.s.deceleration; q.vy *= c.s.deceleration;
       },
       aimCost: () => 0,
-      apply(a, h) { release(a); mouseTo(a, Math.cos(h) * 300, Math.sin(h) * 300); },
+      apply(a, [px, py]) { release(a); mouseTo(a, px, py); },
     },
   };
 
@@ -149,6 +161,8 @@ const Hunter = (() => {
     const bSpeed = st == 8 ? 1e9 : st == 5 ? 14 + ms : st == 11 ? 16 + ms : ({ 4: 25, 6: 20, 9: 12, 10: 20 }[st] || 10) * (ms || 1);
     const range = st == 8 ? 750 : st == 4 ? 600 : Math.min(bSpeed * 60, 900); // bullets live 60 frames
     const c = { a, s, st, ms, target, range, tDist: 0, aimAng: s.angle || 0 };
+    if (ram) c.aimTargets = pool.slice().sort((p, q) => tScore(p) - tScore(q)).slice(0, 3)
+      .map(e => { const [x, y] = rel(e); return { x, y, vx: e.vx || 0, vy: e.vy || 0 }; });
     let tx = 0, ty = 0, standoff = 0;
     if (target) {
       [tx, ty] = rel(target); c.tx = tx; c.ty = ty; c.tDist = Math.hypot(tx, ty);
@@ -161,7 +175,7 @@ const Hunter = (() => {
     const N = ctl.horizon || CFG.horizon;
     let bestC = null, bestCost = Infinity;
     // Kontynuacja poprzedniego planu (MPC z pamięcią): bez tego bot co klatkę zmienia zdanie i „drga” na A/D.
-    let cands = ctl.cands();
+    let cands = ctl.cands(c);
     if (kind == 'rot' && lastPlan && lastPlan[2] > 1) cands = cands.concat([[lastPlan[0], lastPlan[1], lastPlan[2] - 1, lastPlan[3]]]);
     for (const cand of cands) {
       const q = ctl.init(s); let cost = 0, aimSum = 0;
@@ -178,6 +192,7 @@ const Hunter = (() => {
           const d = Math.hypot(th.x + th.vx * t - q.x, th.y + th.vy * t - q.y) - th.r;
           cost += d < 0 ? th.w * 1e5 / (1 + t * 0.1) : th.w * CFG.softW * Math.exp(-d / CFG.softR) / (1 + t * 0.05);
         }
+        if (target && ram) { const ex = tx + (target.vx || 0) * t - q.x, ey = ty + (target.vy || 0) * t - q.y; q.minD = Math.min(q.minD ?? 1e9, Math.hypot(ex, ey)); }
         if (target && ctl.aimCost) {
           const ex = tx + (target.vx || 0) * t - q.x, ey = ty + (target.vy || 0) * t - q.y;
           aimSum += ctl.aimCost(q, cand, Math.atan2(ey, ex), Math.hypot(ex, ey), c);
@@ -187,7 +202,7 @@ const Hunter = (() => {
         const ex = tx + (target.vx || 0) * N - q.x, ey = ty + (target.vy || 0) * N - q.y, d = Math.hypot(ex, ey);
         // poza zasięgiem: podlatuj (orby nie osłabiają przyciągania), w zasięgu: trzymaj dystans, orby mają pierwszeństwo
         const out = Math.max(0, d - c.range * 0.9);
-        cost += (O.length ? 0.3 : 1) * Math.abs(d - standoff) + 2 * out + aimSum / N; // celowanie liczone średnio po całym horyzoncie
+        cost += ram ? 2 * (q.minD ?? d) : (O.length ? 0.3 : 1) * Math.abs(d - standoff) + 2 * out + aimSum / N; // taranowanie: liczy się najbliższe podejście do celu // celowanie liczone średnio po całym horyzoncie
       }
       // XP to priorytet: każdy niezebrany orb ciągnie statek do siebie (liniowo z odległością, mocniej gdy orb zaraz zniknie),
       // a zebrany w horyzoncie daje premię. Waga dominuje nad celowaniem i dystansem do wroga.
@@ -198,7 +213,7 @@ const Hunter = (() => {
         cost += CFG.orbW * urg * (d / 250);
         if (d > 2 * (o.timer - N)) cost += CFG.orbW * urg; // nie zdąży dolecieć — przepadnie
       }
-      if (cand === cands[cands.length - 1] && cands.length > ctl.cands().length) cost *= 0.9; // premia za trzymanie się planu
+      if (cand === cands[cands.length - 1] && cands.length > ctl.cands(c).length) cost *= 0.9; // premia za trzymanie się planu
       if (cost < bestCost) { bestCost = cost; bestC = cand; }
     }
     lastPlan = kind == 'rot' ? bestC : null;
