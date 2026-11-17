@@ -51,13 +51,14 @@ export const numbnessLoop = {
     { key: "anonymity", label: "Kupuj ulepszenia anonymity", type: "bool", default: true },
     { key: "apathyUpg", label: "Kupuj ulepszenia Apathy", type: "bool", default: true },
     { key: "a1Buy", label: "Kupuj buyables: perki, Repli-Trees, Repli-Grass, Grass-Skip", type: "bool", default: true },
-    { key: "a1Pct", label: "…ale tylko za ≤ tyle % posiadanej waluty na zakup", type: "number", default: 5, min: 0.1, step: 1 },
+    { key: "a1Pct", label: "…ale tylko za ≤ tyle % posiadanej waluty na zakup (poza perkami)", type: "number", default: 5, min: 0.1, step: 1 },
     { key: "grass", label: "Zbieraj Repli-Grass (najechanie na pola siatki)", type: "bool", default: true },
     { key: "doubler", label: "Kupuj Numbness Doubler", type: "bool", default: true },
     { key: "reducer", label: "Kupuj Challenge Reducer", type: "bool", default: true },
     { key: "booster", label: "Kupuj Apathy Booster", type: "bool", default: true },
     { key: "minor", label: "Kupuj Numbness 2–7, gdy kosztują ≤ 1% numbness", type: "bool", default: true },
     { key: "reset", label: "Rób reset apathy", type: "bool", default: true },
+    { key: "holdAn", label: "Nie resetuj, dopóki nie są kupione wszystkie ulepszenia anonymity (np. XII po Singularity)", type: "bool", default: true },
     { key: "patience", label: "Szczyt tempa: tyle sekund poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
     { key: "minSec", label: "Min. czas runu przed resetem (s)", type: "number", default: 10, min: 1, step: 1 },
   ],
@@ -83,7 +84,8 @@ export const numbnessLoop = {
             if (!t || t.unlocked === false || !t.canAfford) continue;
             const cost = new Dec(t.cost);
             const B = L[id]; const have = B.currency ? new Dec(B.currency.call(B)) : null;
-            if (have && cost.gt(have.mul(ctx.p.a1Pct / 100))) continue; // nie przepalamy mnożnikowej waluty
+            // perk points nie mnożą się same, więc perki kupujemy do spodu; pozostałe waluty chronimy limitem %
+            if (layer !== "pr" && have && cost.gt(have.mul(ctx.p.a1Pct / 100))) continue;
             if (!best || cost.lt(best.cost)) best = { id, cost };
           }
           if (!best) break;
@@ -137,6 +139,11 @@ export const numbnessLoop = {
       if (R > st.best) { st.best = R; st.below = 0; } else if (can) st.below++;
     }
     const rate = st.best * 60;
+    const anMissing = ctx.p.holdAn && window.layers.an ? upgradeIds("an").filter(id => !has("an", id)) : [];
+    if (anMissing.length && ctx.p.reset) {
+      ctx.status(`długi run: czekam na ulepszenia anonymity (brakuje ${anMissing.length}) · +${window.format(gain)} apathy · anonymity ${window.format(P.an.anonymity)}`);
+      return;
+    }
     if (ctx.p.reset && can && sec >= ctx.p.minSec && st.best > 0 && st.below >= ctx.p.patience) {
       C.onClick.call(C);
       ctx.did();
