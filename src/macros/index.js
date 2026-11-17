@@ -12,6 +12,7 @@ import { bhSkillButtons } from "./tweaks.js";
 import { shipHunter } from "./ship.js";
 import { starExplore } from "./exploration.js";
 import { pollenLoop, nectarLoop, flowerPicker, hiveResearch } from "./hive.js";
+import { numbnessLoop } from "./numbness.js";
 
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -22,5 +23,6 @@ export default [
   rocketPassengers, rocketMaker,
   shipHunter, starExplore,
   flowerPicker, pollenLoop, nectarLoop, hiveResearch,
+  numbnessLoop,
   bhSkillButtons,
 ];
