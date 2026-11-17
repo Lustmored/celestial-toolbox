@@ -7,6 +7,13 @@ const NUMB_BUYABLES = [
   { id: 81, key: "doubler", label: "Numbness Doubler" },
   { id: 88, key: "reducer", label: "Challenge Reducer" },
   { id: 89, key: "booster", label: "Apathy Booster" },
+  // tanie +1% wykładnika warstw — kupowane tylko, gdy kosztują ≤ 1% posiadanego numbness (nie podbierają na Reducer)
+  { id: 82, key: "minor", label: "Perk Raiser", cheap: true },
+  { id: 83, key: "minor", label: "Fundamental Anonymity", cheap: true },
+  { id: 84, key: "minor", label: "Repli-Leaf", cheap: true },
+  { id: 85, key: "minor", label: "Repli-Tree", cheap: true },
+  { id: 86, key: "minor", label: "Repli-Grass", cheap: true },
+  { id: 87, key: "minor", label: "Grass-Skipper", cheap: true },
 ];
 
 const D = () => window.Decimal;
@@ -48,6 +55,7 @@ export const numbnessLoop = {
     { key: "doubler", label: "Kupuj Numbness Doubler", type: "bool", default: true },
     { key: "reducer", label: "Kupuj Challenge Reducer", type: "bool", default: true },
     { key: "booster", label: "Kupuj Apathy Booster", type: "bool", default: true },
+    { key: "minor", label: "Kupuj Numbness 2–7, gdy kosztują ≤ 1% numbness", type: "bool", default: true },
     { key: "reset", label: "Rób reset apathy", type: "bool", default: true },
     { key: "patience", label: "Szczyt tempa: tyle sekund poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
     { key: "minSec", label: "Min. czas runu przed resetem (s)", type: "number", default: 10, min: 1, step: 1 },
@@ -103,6 +111,7 @@ export const numbnessLoop = {
         if (L.purchaseLimit && window.getBuyableAmount("fu", b.id).gte(L.purchaseLimit.call(L))) continue;
         const cost = new Dec(t.cost);
         if (new Dec(P.fu.numb).lt(cost)) continue;
+        if (b.cheap && cost.gt(new Dec(P.fu.numb).mul(0.01))) continue;
         if (!best || cost.lt(best.cost)) best = { ...b, cost };
       }
       if (!best) break;
@@ -110,7 +119,7 @@ export const numbnessLoop = {
       window.buyBuyable("fu", best.id);
       if (!window.getBuyableAmount("fu", best.id).gt(before)) break;
       bought++;
-      ctx.log(`${best.label} → ${window.formatWhole(window.getBuyableAmount("fu", best.id))}`);
+      if (!best.cheap) ctx.log(`${best.label} → ${window.formatWhole(window.getBuyableAmount("fu", best.id))}`);
     }
     if (bought) { ctx.did(bought); window.updateTemp?.(); }
 
