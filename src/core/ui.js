@@ -153,6 +153,7 @@ export function mountUI(version) {
   const st = settings();
 
   const style = document.createElement("style");
+  style.id = "celestial-toolbox-style";
   style.textContent = `body { width: calc(100% - var(--ctb-width, ${WIDTH}px)) !important; position: absolute !important; left: 0 !important; top: 0 !important; margin: 0 !important; }`;
   document.head.append(style);
 
@@ -251,14 +252,34 @@ export function mountUI(version) {
     setTimeout(() => { foot.textContent = prev; }, 2500);
   }
 
-  window.addEventListener("keydown", e => {
+  const onKey = e => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.code === "KeyM") { e.preventDefault(); e.stopPropagation(); toggleCollapse(); }
     if (e.code === "KeyP") { e.preventDefault(); e.stopPropagation(); togglePause(); }
-  }, true);
+  };
+  window.addEventListener("keydown", onKey, true);
 
   render();
   const refresh = () => { if (!st.collapsed) rows.forEach(r => r.update()); };
   refresh();
-  setInterval(refresh, 500);
+  const refreshTimer = setInterval(refresh, 500);
+
+  // Aktualizacja bez odświeżania strony: co 5 min sprawdzamy version.json; gdy jest nowsza, pokazujemy przycisk.
+  const updBtn = h("button", { class: "upd", style: "display:none", title: "Wczytaj najnowszą wersję toolboxa bez odświeżania strony", onclick: () => window.CelestialToolbox?.reload() });
+  root.querySelector(".head").insertBefore(updBtn, pauseBtn);
+  const checkUpdate = async () => {
+    const v = await window.CelestialToolbox?.latestVersion?.();
+    if (v && v !== version) { updBtn.textContent = "⟳ v" + v; updBtn.style.display = ""; }
+  };
+  const updTimer = setInterval(checkUpdate, 5 * 60 * 1000);
+  setTimeout(checkUpdate, 10000);
+
+  unmountUI = () => {
+    window.removeEventListener("keydown", onKey, true);
+    clearInterval(refreshTimer); clearInterval(updTimer);
+    host.remove(); style.remove();
+    document.documentElement.style.removeProperty("--ctb-width");
+  };
 }
+
+export let unmountUI = () => {};

@@ -42,6 +42,12 @@ export function save() {
   }, 200);
 }
 
+/** Zapisuje od razu (np. przed przeładowaniem toolboxa). */
+export function flush() {
+  clearTimeout(saveTimer);
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (err) { console.warn("[Toolbox] Nie udało się zapisać ustawień:", err); }
+}
+
 export function exportSettings() {
   return JSON.stringify(state);
 }

@@ -29,7 +29,7 @@ const common = {
   bundle: true,
   format: "iife",
   target: "es2020",
-  define: { __VERSION__: JSON.stringify(version) },
+  define: { __VERSION__: JSON.stringify(version), __BASE__: JSON.stringify(base) },
   legalComments: "none",
 };
 await build({ ...common, outfile: "dist/celestial-toolbox.js", minify: true });
@@ -49,6 +49,7 @@ if (base) {
   await build({ ...common, outfile: "dist/celestial-toolbox.user.js", banner: { js: header } });
 }
 writeFileSync("dist/celestial-toolbox.meta.js", header);
+writeFileSync("dist/version.json", JSON.stringify({ version }));
 
 // Strona instalacyjna na GitHub Pages: link do userscriptu + bookmarklet awaryjny.
 const src = base ? base + "/celestial-toolbox.js" : "celestial-toolbox.js";

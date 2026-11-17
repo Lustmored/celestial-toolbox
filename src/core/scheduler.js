@@ -136,3 +136,13 @@ export function hookGameLoop(onReady) {
   if (attempt()) return;
   const timer = setInterval(() => { if (attempt()) clearInterval(timer); }, 250);
 }
+
+/** Zdejmuje toolbox z gry: onDisable włączonych makr (ustawienia zostają), przywraca oryginalny gameLoop. */
+export function unhook() {
+  for (const m of macros) {
+    if (macroSettings(m).enabled && m.onDisable) {
+      try { m.onDisable(makeCtx(m, runtime.get(m.id))); } catch (err) { console.error(`[Toolbox:${m.id}] onDisable:`, err); }
+    }
+  }
+  if (window.gameLoop?.__toolbox) window.gameLoop = window.gameLoop.__original;
+}
