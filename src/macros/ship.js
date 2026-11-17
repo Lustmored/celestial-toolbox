@@ -136,9 +136,12 @@ const Hunter = (() => {
     O.sort((p, q) => p.d - q.d); O.length = Math.min(O.length, 20);
 
     // ---- common core 2: target = nearest/weakest enemy (with hysteresis); asteroids as fallback
+    const TR = (() => { const bs = st == 8 ? 1e9 : st == 5 ? 14 + ms : st == 11 ? 16 + ms : ({ 4: 25, 6: 20, 9: 12, 10: 20 }[st] || 10) * (ms || 1);
+      return st == 8 ? 750 : st == 4 ? 600 : Math.min(bs * 60, 900); })();
     let pool = a.enemies.filter(e => alive(e) && !e.invulnerable && !e._pausedBoss);
     if (!pool.length) pool = a.asteroids.filter(alive);
-    const tScore = e => { const [x, y] = rel(e); return Math.hypot(x, y) * (0.6 + 0.4 * hpFrac(e)); };
+    // cel poza zasięgiem broni jest dużo mniej atrakcyjny niż ten, do którego można strzelać od razu
+    const tScore = e => { const [x, y] = rel(e); const d = Math.hypot(x, y); return d * (0.6 + 0.4 * hpFrac(e)) + Math.max(0, d - TR) * 3; };
     let best = null, bestS = Infinity;
     for (const e of pool) { const sc = tScore(e); if (sc < bestS) { bestS = sc; best = e; } }
     if (!(target && pool.includes(target) && tScore(target) < bestS * 1.25)) target = best;
@@ -182,7 +185,9 @@ const Hunter = (() => {
       }
       if (target) {
         const ex = tx + (target.vx || 0) * N - q.x, ey = ty + (target.vy || 0) * N - q.y, d = Math.hypot(ex, ey);
-        cost += (O.length ? 0.3 : 1) * Math.abs(d - standoff) + aimSum / N; // celowanie liczone średnio po całym horyzoncie
+        // poza zasięgiem: podlatuj (orby nie osłabiają przyciągania), w zasięgu: trzymaj dystans, orby mają pierwszeństwo
+        const out = Math.max(0, d - c.range * 0.9);
+        cost += (O.length ? 0.3 : 1) * Math.abs(d - standoff) + 2 * out + aimSum / N; // celowanie liczone średnio po całym horyzoncie
       }
       // XP to priorytet: każdy niezebrany orb ciągnie statek do siebie (liniowo z odległością, mocniej gdy orb zaraz zniknie),
       // a zebrany w horyzoncie daje premię. Waga dominuje nad celowaniem i dystansem do wroga.
