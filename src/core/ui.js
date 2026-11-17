@@ -195,7 +195,8 @@ export function mountUI(version) {
     h("div", { class: "foot" },
       h("span", { class: "keys" }, "Alt+M panel · Alt+P pauza"),
       h("button", { title: "Skopiuj ustawienia do schowka", onclick: copySettings }, "Eksport"),
-      h("button", { title: "Wklej ustawienia", onclick: pasteSettings }, "Import")),
+      h("button", { title: "Wklej ustawienia", onclick: pasteSettings }, "Import"),
+      h("button", { title: "Sprawdź i od razu wczytaj nową wersję toolboxa (bez odświeżania strony)", onclick: () => manualUpdate() }, "⟳ Aktualizuj")),
     h("div", { class: "foot cloud" },
       h("span", { class: "keys" }, "galaxy.click, slot 0"),
       h("button", { title: "Zapisz grę w chmurze galaxy.click (slot 0)", onclick: doCloudSave }, "☁ Zapisz"),
@@ -271,6 +272,13 @@ export function mountUI(version) {
     const v = await window.CelestialToolbox?.latestVersion?.();
     if (v && v !== version) { updBtn.textContent = "⟳ v" + v; updBtn.style.display = ""; }
   };
+  async function manualUpdate() {
+    alertish("Sprawdzam…");
+    const v = await window.CelestialToolbox?.latestVersion?.();
+    if (!v) { alertish("Nie udało się sprawdzić wersji."); return; }
+    if (v === version) { alertish("Masz najnowszą (v" + version + ")."); return; }
+    window.CelestialToolbox.reload();
+  }
   const updTimer = setInterval(checkUpdate, 5 * 60 * 1000);
   setTimeout(checkUpdate, 10000);
 
