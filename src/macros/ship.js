@@ -18,8 +18,9 @@ const Hunter = (() => {
   for (const dur of [8, 18, 32]) for (const tu of [-1, 0, 1]) for (const th of [-1, 0, 1]) for (const t2 of [-1, 0, 1]) ROT_CANDS.push([tu, th, dur, t2]);
   const ring16 = Array.from({ length: 16 }, (_, i) => i * Math.PI / 8);
   // emulate a mouse move through the game's own window 'pointermove' listener (arena.js 1565)
-  const mouseTo = (a, dx, dy) => { const rc = a.canvas.getBoundingClientRect();
-    window.dispatchEvent(new PointerEvent('pointermove', { clientX: rc.left + a.canvasWidth / 2 + dx, clientY: rc.top + a.canvasHeight / 2 + dy })); };
+  // Celowanie: ustawiamy stan myszy areny (współrzędne canvasa, środek = statek) — to samo, co robi handler
+  // pointermove gry, ale niezależne od tego, gdzie jest prawdziwy kursor. Ruch prawdziwej myszy nad grą nadpisze to na klatkę.
+  const mouseTo = (a, dx, dy) => { a.mouseX = a.canvasWidth / 2 + dx; a.mouseY = a.canvasHeight / 2 + dy; };
 
   // ---- per-ship-class controllers: cands = action set, init/step = the game's own movement formulas, apply = inputs
   const CTRL = {
@@ -261,7 +262,7 @@ const applyParams = p => {
   Hunter.CFG.margin = Number(p.margin) || 0;
   Hunter.CFG.aimNear = (Number(p.aggression) || 0) * 15;
   Hunter.CFG.aimFar = (Number(p.aggression) || 0) * 4;
-  Hunter.CFG.allowMouse = Boolean(p.allowMouse);
+  Hunter.CFG.allowMouse = p.mouseAim !== false;
   Hunter.CFG.orbW = (p.orbPriority ?? 100) * 30;
   Hunter.CFG.autoUpgrade = p.autoUpgrade ?? true;
 };
@@ -285,7 +286,7 @@ export const shipHunter = {
     { key: "margin", label: "Margines bezpieczeństwa (px)", type: "number", default: 14, min: 0, step: 2 },
     { key: "orbPriority", label: "Priorytet zbierania XP (0–200)", type: "number", default: 100, min: 0, step: 10 },
     { key: "autoUpgrade", label: "Sam wybieraj ulepszenia po level upie", type: "bool", default: true },
-    { key: "allowMouse", label: "Celuj kursorem w statkach, które strzelają w stronę myszki", type: "bool", default: true },
+    { key: "mouseAim", label: "Celuj kursorem w statkach, które strzelają/lecą w stronę myszki", type: "bool", default: true },
   ],
   available: () => Boolean(window.player?.ir),
   onEnable(ctx) { applyParams(ctx.p); this._p = ctx.p; this._t = setInterval(() => applyParams(this._p), 1000); Hunter.start(); },
