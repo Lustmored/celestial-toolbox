@@ -59,6 +59,7 @@ export const numbnessLoop = {
     { key: "minor", label: "Kupuj Numbness 2–7 (≤ 1% numbness, bez limitu po wymaksowaniu Doubler/Reducer/Booster)", type: "bool", default: true },
     { key: "reset", label: "Rób reset apathy", type: "bool", default: true },
     { key: "holdAn", label: "Nie resetuj, dopóki nie są kupione wszystkie ulepszenia anonymity (np. XII po Singularity)", type: "bool", default: true },
+    { key: "gsHold", label: "Po Grass-Skip wstrzymaj resety apathy na (s)", type: "number", default: 120, min: 0, step: 10 },
     { key: "patience", label: "Szczyt tempa: tyle sekund poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
     { key: "minSec", label: "Min. czas runu przed resetem (s)", type: "number", default: 10, min: 1, step: 1 },
   ],
@@ -142,6 +143,18 @@ export const numbnessLoop = {
     const gain = new Dec(P.fu.apathyToGet), sec = now - st.t0;
     const C = window.layers.fu.clickables?.[32];
     const can = C && C.canClick.call(C);
+    // Grass-Skip (albo inny reset w trakcie runu) zeruje replicanti: apathy z resetu nagle spada. To nie jest „szczyt minął”
+    // — zaczynamy śledzić szczyt od nowa (czas runu liczy się dalej), żeby nie zresetować apathy zaraz po GS.
+    const gsNow = Number(P.gs?.grassSkip ?? 0);
+    if ((st.gs !== undefined && gsNow !== st.gs) || (st.lastGain && gain.lt(new Dec(st.lastGain).mul(0.5)))) {
+      st.best = 0; st.below = 0; st.hold = now + ctx.p.gsHold;
+      ctx.log(`Grass-Skip/reset w runie — wstrzymuję resety apathy na ${ctx.p.gsHold} s`);
+    }
+    st.gs = gsNow; st.lastGain = gain.toString();
+    if (now < (st.hold ?? 0)) {
+      ctx.status(`odbudowa po Grass-Skip: jeszcze ${Math.ceil(st.hold - now)} s · +${window.format(gain)} apathy`);
+      return;
+    }
     if (now - (st.sample ?? 0) >= 1) {
       st.sample = now;
       const R = can && sec > 0 ? gain.toNumber() / sec : 0;
@@ -158,7 +171,7 @@ export const numbnessLoop = {
       ctx.did();
       st.runs = (st.runs || 0) + 1;
       ctx.log(`reset apathy: +${window.format(gain)} po ${sec.toFixed(0)} s`);
-      st.t0 = now; st.best = 0; st.below = 0;
+      st.t0 = now; st.best = 0; st.below = 0; st.lastGain = null;
       ctx.status(`reset #${st.runs}: +${window.format(gain)} apathy (${rate.toFixed(0)}/min)`);
       return;
     }
