@@ -233,6 +233,18 @@ const Hunter = (() => {
     if (k.includes('healthregen')) return 6;
     return 7;
   };
+  // Tryb „push”: statek do przebijania ściany. XP tylko przyspiesza dojście do ściany (liczba ulepszeń na 20 poziomów jest
+  // stała), więc XP i zasoby idą na sam koniec niezależnie od rzadkości; reszta: rzadkość, potem obrażenia > obrona > regen.
+  const pushPrio = id => {
+    const k = id.toLowerCase();
+    if (k.startsWith('attack')) return 0;
+    if (k.includes('defense') || k.includes('damagereduction') || k.includes('maxhp') || k.includes('health') && !k.includes('regen')) return 1;
+    if (k.includes('healthregen')) return 2;
+    if (k.includes('bulletsize')) return 3;
+    if (k.includes('movespeed') || k.includes('mobility') || k.includes('speedparagon')) return 4;
+    return 5;
+  };
+  const isJunk = id => { const k = id.toLowerCase(); return k.includes('xp') || k.startsWith('dropgain') || k.includes('gain') || k.includes('loot'); };
   let lastPickNote = '';
   function autoPick() {
     const a = getArena();
@@ -243,8 +255,9 @@ const Hunter = (() => {
     let bi = -1, bk = null;
     a.upgradeChoices.forEach((id, i) => {
       const u = P[id]; if (!u) return;
-      const key = [-(R[u.rarity] ? R[u.rarity].score : 0), upgPrio(id)];
-      if (!bk || key[0] < bk[0] || (key[0] == bk[0] && key[1] < bk[1])) { bk = key; bi = i; }
+      const rs = -(R[u.rarity] ? R[u.rarity].score : 0);
+      const key = CFG.upgMode === 'push' ? [isJunk(id) ? 1 : 0, rs, pushPrio(id)] : [0, rs, upgPrio(id)];
+      if (!bk || key[0] < bk[0] || (key[0] == bk[0] && (key[1] < bk[1] || (key[1] == bk[1] && key[2] < bk[2])))) { bk = key; bi = i; }
     });
     if (bi < 0) return;
     a.selectedUpgradeIndex = bi;
@@ -285,6 +298,7 @@ const applyParams = p => {
   Hunter.CFG.allowMouse = p.mouseAim !== false;
   Hunter.CFG.orbW = (p.orbPriority ?? 100) * 30;
   Hunter.CFG.autoUpgrade = p.autoUpgrade ?? true;
+  Hunter.CFG.upgMode = p.upgMode || 'xp';
 };
 
 export const shipHunter = {
@@ -299,6 +313,7 @@ export const shipHunter = {
     "bot i tak nadpisze klawisze w następnej klatce, więc do ręcznego latania wyłącz przełącznik. " +
     "Pilnuje XP: nie ucieka tak daleko, żeby orby XP zdążyły zniknąć. Po level upie sam wybiera ulepszenie: najwyższa rzadkość, " +
     "przy remisie XP, potem prędkość ruchu > atak > rozmiar pocisku > zasoby > obrona > regeneracja. " +
+    "Build „Przebijanie ściany” pomija XP i zasoby (biorą je tylko, gdy nie ma nic innego): rzadkość, potem atak > obrona/HP > regen > pocisk > ruch. " +
     "Statki bez sterowania WASD (lecą/toczą się w stronę kursora) bot prowadzi wirtualnym kursorem — nie ruszaj wtedy myszką nad grą. " +
     "Nie działa przy sterowaniu mobilnym.",
   params: [
@@ -306,6 +321,8 @@ export const shipHunter = {
     { key: "margin", label: "Margines bezpieczeństwa (px)", type: "number", default: 14, min: 0, step: 2 },
     { key: "orbPriority", label: "Priorytet zbierania XP (0–200)", type: "number", default: 100, min: 0, step: 10 },
     { key: "autoUpgrade", label: "Sam wybieraj ulepszenia po level upie", type: "bool", default: true },
+    { key: "upgMode", label: "Build ulepszeń", type: "select", default: "xp",
+      options: [["xp", "Expienie (rzadkość, przy remisie XP)"], ["push", "Przebijanie ściany (obrażenia/obrona, XP i zasoby na końcu)"]] },
     { key: "mouseAim", label: "Celuj kursorem w statkach, które strzelają/lecą w stronę myszki", type: "bool", default: true },
   ],
   available: () => Boolean(window.player?.ir),
