@@ -136,21 +136,21 @@ export const spaceLoop = {
   id: "space-loop",
   name: "Space Energy: reset + Normality",
   group: "Darkness / SMA",
-  every: 0.25,
+  every: 0,
   description:
     "Po każdym resecie Space Energy odkupuje ulepszenia Normality (I–IV…) i buyable Normality (najtańsze najpierw). " +
-    "Reset Space Energy robi w chwili, gdy zysk Space Energy na sekundę od ostatniego resetu przestaje rosnąć " +
-    "(szczyt tempa; „cierpliwość” = ile kolejnych spadków przeczekać). Opcjonalnie kupuje też buyable Space Energy/Space " +
-    "i robi resety Normality.",
+    "Sprawdza stan w każdej klatce gry. Domyślnie resetuje Space Energy na szczycie tempa zysku (SE/s od ostatniego " +
+    "resetu) — u Ciebie wychodzi to ok. 1 s; same resety co klatkę dają ~8× mniej, bo Normality nie zdąży odrosnąć. " +
+    "Do wyboru też „co klatkę” i „co stały czas”. Opcjonalnie kupuje buyable Space Energy/Space i robi resety Normality.",
   params: [
     { key: "buyN", label: "Kupuj ulepszenia i buyable Normality", type: "bool", default: true },
     { key: "buyDs", label: "Kupuj też buyable Space Energy / Space", type: "bool", default: false },
     { key: "reset", label: "Rób reset Space Energy", type: "bool", default: true },
     { key: "mode", label: "Kiedy resetować", type: "select", default: "peak",
-      options: [["peak", "na szczycie tempa zysku"], ["time", "co stały czas"]] },
-    { key: "patience", label: "Cierpliwość (kolejne spadki tempa)", type: "number", default: 3, min: 1, step: 1 },
-    { key: "minSec", label: "Min. czas między resetami (s)", type: "number", default: 2, min: 0.25, step: 0.25 },
-    { key: "fixedSec", label: "Stały czas resetu (s, tryb „co stały czas”)", type: "number", default: 30, min: 0.25 },
+      options: [["tick", "co klatkę (najszybciej)"], ["peak", "na szczycie tempa zysku"], ["time", "co stały czas"]] },
+    { key: "patience", label: "Cierpliwość (kolejne spadki tempa)", type: "number", default: 2, min: 1, step: 1 },
+    { key: "minSec", label: "Min. czas między resetami (s)", type: "number", default: 0.1, min: 0, step: 0.05 },
+    { key: "fixedSec", label: "Stały czas resetu (s, tryb „co stały czas”)", type: "number", default: 1, min: 0.05, step: 0.05 },
     { key: "nReset", label: "Rób też resety Normality (szczyt tempa)", type: "bool", default: false },
   ],
   available: g => g.layerActive("ds") && Boolean(window.layers.ds?.clickables?.[11]),
@@ -177,6 +177,10 @@ export const spaceLoop = {
         bought++;
       }
     };
+    // Tryb „co klatkę”: najpierw reset, potem od razu odkup — kolejna klatka rośnie już z kupionymi buyable.
+    if (ctx.p.reset && ctx.p.mode === "tick" && new D(P.ds.spaceEnergyToGet).gte(1) && ctx.click("ds", 11, { refresh: true })) {
+      st.n_resets = (st.n_resets || 0) + 1; ctx.did();
+    }
     if (ctx.p.buyN) {
       for (const id of Object.keys(window.layers.dn.upgrades || {})) {
         if (isNaN(id) || window.hasUpgrade("dn", id)) continue;
@@ -197,6 +201,15 @@ export const spaceLoop = {
       else if (!ns.best || r.gt(new D(ns.best))) ns.best = r.toString();
     }
 
+    if (ctx.p.mode === "tick") {
+      st.t0 ??= now;
+      if (now - (st.sLast || 0) > 1000) {
+        const s = (now - st.t0) / 1000;
+        ctx.status(`resety co klatkę: ${st.n_resets || 0} w ${s.toFixed(0)} s · SE ${window.format(P.ds.spaceEnergy)}`);
+        st.sLast = now;
+      }
+      return;
+    }
     const gain = new D(P.ds.spaceEnergyToGet);
     st.t0 ??= now;
     if (st.lastGain && gain.lt(new D(st.lastGain).mul(0.5))) { st.t0 = now; st.bestRate = 0; st.down = 0; } // reset z zewnątrz
