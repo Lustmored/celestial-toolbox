@@ -26,21 +26,3 @@ export const moonstone = {
     if (hits) { ctx.did(hits); ctx.status(`ostatnio ${hits} ciosów`); }
   },
 };
-
-export const repliGrass = {
-  id: "repli-grass",
-  name: "Repli-Grass",
-  group: "Cantepocalypse",
-  every: 0.5,
-  description: "Zbiera repli-trawę z siatki, gdy mnożnik komórki jest większy niż 1.",
-  available: () => Boolean(window.player.rg?.grid && window.layers.rg?.grid?.onHover),
-  run(ctx) {
-    for (const id of cells()) {
-      const grass = window.getGridData("rg", id);
-      if (grass?.gt?.(1)) {
-        window.layers.rg.grid.onHover(grass, id);
-        ctx.did();
-      }
-    }
-  },
-};
