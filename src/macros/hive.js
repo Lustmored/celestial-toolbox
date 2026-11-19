@@ -410,3 +410,38 @@ export const hiveResearch = {
     ctx.status(`badania łącznie: ${window.format(window.player.bee.totalResearch)}` + (n ? ` · teraz +${n}` : ""));
   },
 };
+
+// Twigs: jak gracz z wciśniętą myszką — „trzyma” kursor na jednym drzewie naraz (onHold gry, 0,05 × obrażenia na takt),
+// najpierw najwyższy tier, przy remisie to najbliższe pęknięcia. Nic nie kupuje.
+export const twigCollector = {
+  id: "twig-collector",
+  name: "Twigs: łamanie drzew",
+  group: "Hive",
+  every: 0,
+  description:
+    "W każdej klatce gry przytrzymuje kursor na jednym drzewie (tak jak wciśnięta mysz — ten sam efekt przytrzymania z gry), " +
+    "zaczynając od najwyższego tieru; przy remisie bierze drzewo najbliższe złamania. Ulepszeń nie kupuje.",
+  params: [],
+  available: g => g.layerActive("tw") && Boolean(window.layers?.tw?.grid?.onHold),
+  run(ctx) {
+    const grid = window.layers.tw.grid, st = ctx.state;
+    let best = null, n = 0;
+    for (let r = 1; r <= 5; r++) {
+      for (let c = 1; c <= 8; c++) {
+        const id = r * 100 + c, v = window.getGridData("tw", id);
+        if (!v || !(v[0] > 0)) continue;
+        n++;
+        const tier = new window.Decimal(v[1]), hp = new window.Decimal(v[2]);
+        if (!best || tier.gt(best.tier) || (tier.eq(best.tier) && hp.lt(best.hp))) best = { id, tier, hp };
+      }
+    }
+    if (best) {
+      grid.onHold(window.getGridData("tw", best.id), best.id);
+      if (window.getGridData("tw", best.id)[2].lte(0)) { st.broken = (st.broken || 0) + 1; ctx.did(); }
+    }
+    if (Date.now() - (st.sLast || 0) > 500) {
+      st.sLast = Date.now();
+      ctx.status(best ? `drzew: ${n} · łamię tier ${window.formatWhole(best.tier)} · złamane: ${st.broken || 0}` : `czekam na drzewa · złamane: ${st.broken || 0}`);
+    }
+  },
+};

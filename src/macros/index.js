@@ -11,7 +11,7 @@ import { rocketPassengers } from "./rocket.js";
 import { bhSkillButtons } from "./tweaks.js";
 import { shipHunter } from "./ship.js";
 import { starExplore } from "./exploration.js";
-import { pollenLoop, nectarLoop, flowerPicker, hiveResearch } from "./hive.js";
+import { pollenLoop, nectarLoop, flowerPicker, hiveResearch, twigCollector } from "./hive.js";
 import { numbnessLoop } from "./numbness.js";
 
 export default [
@@ -22,7 +22,7 @@ export default [
   spaceDust,
   rocketPassengers,
   shipHunter, starExplore,
-  flowerPicker, pollenLoop, nectarLoop, hiveResearch,
+  flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector,
   numbnessLoop,
   bhSkillButtons,
 ];
