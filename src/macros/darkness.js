@@ -9,7 +9,7 @@ export const casinoKiller = {
   every: 0.05,
   description:
     "Dopóki są zapisane wybory punchcardów, aktywuje kolejne brakujące karty z listy priorytetów dla bieżącego trybu " +
-    "(Eclipse / SMA / zwykłe Darkness) zamiast wylosowanych — kilka naraz, jeśli wyborów starczy. " +
+    "(Eclipse / SMA) zamiast wylosowanych — kilka naraz, jeśli wyborów starczy. " +
     "Obsługuje karty o koszcie 1 wyboru (ID < 400). Gdy karty nie da się aktywować, przywraca wylosowany wybór. " +
     "„Profil w Eclipse”: Eclipse Shards (zwykła lista Eclipse — najpierw trawa i chmury, potem ×ES, /wymaganie resetu ES, " +
     "dłuższy Eclipse, punkty) albo Grass Jump (wymaganie skoku, Grassjumpers, trawa).",
@@ -19,7 +19,6 @@ export const casinoKiller = {
     { key: "gj", label: "Priorytet w Eclipse – profil GJ", type: "text", default: "113 213 308 307 108 206 201" },
     { key: "sma", label: "Priorytet w SMA", type: "text", default: "100 302 300 301 203 101 201 306" },
     { key: "eclipse", label: "Priorytet w Eclipse", type: "text", default: "108 112 304 200 303 211 206 307 201 101" },
-    { key: "darkness", label: "Priorytet w Darkness", type: "text", default: "301 201" },
     { key: "maxPerRun", label: "Maks. kart na jedno uruchomienie", type: "number", default: 10, min: 1, step: 1 },
   ],
   available: g => g.layerActive("pu") && Boolean(window.layers.pu?.clickables?.[10]),
@@ -27,7 +26,8 @@ export const casinoKiller = {
     const pu = window.player.pu;
     const inEclipse = Boolean(window.player.pet?.legPetTimers?.[0]?.active);
     const inSMA = Boolean(window.player.sma?.inStarmetalChallenge) && !inEclipse;
-    const mode = inEclipse ? "eclipse" : inSMA ? "sma" : "darkness";
+    const mode = inEclipse ? "eclipse" : inSMA ? "sma" : null;
+    if (!mode) { ctx.status("poza SMA i Eclipse — wybory czekają na bieg"); return; }
     const prof = ctx.p.eclProfile;
     const listKey = mode === "eclipse" && prof === "gj" ? "gj" : mode;
     const wanted = ctx.parseIds(ctx.p[listKey]).filter(id => id < 400 && window.player.pu.levelables[id]);
