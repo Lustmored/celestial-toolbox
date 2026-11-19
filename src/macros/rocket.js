@@ -83,10 +83,12 @@ export const rocketPassengers = {
   every: 3,
   description:
     "Ustawia pasażerów rakiety (startu nie robi). Pomija pety, których kosmiczny odpowiednik ma już limit poziomu, i wybiera te, " +
-    "które dają najwięcej kosmicznych poziomów w tym locie (przy remisie: mniejsza strata poziomu w Check Back). Uncommony (kosztują Paragon Shardy) tylko gdy dobijają " +
-    "kosmicznego peta do limitu i zostaje rezerwa PS. Gdy makro jest włączone, nadpisuje ręczny wybór.",
+    "które dają najwięcej kosmicznych poziomów w tym locie (przy remisie: mniejsza strata poziomu w Check Back). Uncommony (kosztują Paragon Shardy: 3/8/15/24 PS za 1/2/3/4) " +
+    "wybiera wg listy priorytetów, o ile zostaje rezerwa PS (opcjonalnie tylko te, które dobijają do limitu). Gdy makro jest włączone, nadpisuje ręczny wybór.",
   params: [
-    { key: "maxUncommon", label: "Maks. uncommonów na lot (PS)", type: "number", default: 1, min: 0, max: 4, step: 1 },
+    { key: "maxUncommon", label: "Maks. uncommonów na lot (PS)", type: "number", default: 2, min: 0, max: 4, step: 1 },
+    { key: "uncommonCapOnly", label: "Uncommony tylko gdy dobijają do limitu (stary tryb)", type: "bool", default: false },
+    { key: "uncommonPrio", label: "Priorytet uncommonów (ID kosmicznych petów)", type: "text", default: "208 206 201 207 209 205 202 203 204" },
     { key: "psReserve", label: "Zostaw co najmniej Paragon Shardów", type: "number", default: 4, min: 0, step: 1 },
     { key: "minGain", label: "Min. kosmicznych poziomów z jednego peta", type: "number", default: 1, min: 1, step: 1 },
     { key: "maxLevel", label: "Nie wysyłaj petów powyżej poziomu (0 = bez limitu)", type: "number", default: 0, min: 0, step: 1 },
@@ -105,8 +107,13 @@ export const rocketPassengers = {
 
     const pick = [];
     let nU = 0;
-    // Uncommony tylko gdy dobijają do limitu i stać nas na PS z rezerwą.
-    for (const c of all.filter(c => c.ri === 1 && c.caps)) {
+    // Uncommony: wg listy priorytetów (pety bez limitu na końcu listy), przy remisie więcej kosmicznych poziomów.
+    // W starym trybie tylko te, które dobijają kosmicznego peta do limitu.
+    const prio = ctx.parseIds(ctx.p.uncommonPrio);
+    const rank = id => { const i = prio.indexOf(id); return i < 0 ? 99 : i; };
+    const unc = all.filter(c => c.ri === 1 && (!ctx.p.uncommonCapOnly || c.caps))
+      .sort((a, b) => rank(a.id) - rank(b.id) || b.gained - a.gained);
+    for (const c of unc) {
       if (nU >= ctx.p.maxUncommon || pick.length >= max) break;
       if (ps - passengerCost(nU + 1)[1] < ctx.p.psReserve) break;
       pick.push(c); nU++;
