@@ -10,8 +10,11 @@ export const casinoKiller = {
   description:
     "Dopóki są zapisane wybory punchcardów, aktywuje kolejne brakujące karty z listy priorytetów dla bieżącego trybu " +
     "(Eclipse / SMA / zwykłe Darkness) zamiast wylosowanych — kilka naraz, jeśli wyborów starczy. " +
-    "Obsługuje karty o koszcie 1 wyboru (ID < 400). Gdy karty nie da się aktywować, przywraca wylosowany wybór.",
+    "Obsługuje karty o koszcie 1 wyboru (ID < 400). Gdy karty nie da się aktywować, przywraca wylosowany wybór. " +
+    "Przełącznik „Profil Grass Jump” podmienia listę w Eclipse na karty pod Grass Jump (wymaganie skoku, Grassjumpers, trawa).",
   params: [
+    { key: "gjMode", label: "Profil Grass Jump (w Eclipse)", type: "bool", default: false },
+    { key: "gj", label: "Priorytet w Eclipse – profil GJ", type: "text", default: "113 213 308 307 108 206 201" },
     { key: "sma", label: "Priorytet w SMA", type: "text", default: "301 201 302 300" },
     { key: "eclipse", label: "Priorytet w Eclipse", type: "text", default: "201" },
     { key: "darkness", label: "Priorytet w Darkness", type: "text", default: "301 201" },
@@ -23,7 +26,8 @@ export const casinoKiller = {
     const inEclipse = Boolean(window.player.pet?.legPetTimers?.[0]?.active);
     const inSMA = Boolean(window.player.sma?.inStarmetalChallenge) && !inEclipse;
     const mode = inEclipse ? "eclipse" : inSMA ? "sma" : "darkness";
-    const wanted = ctx.parseIds(ctx.p[mode]).filter(id => id < 400 && window.player.pu.levelables[id]);
+    const listKey = mode === "eclipse" && ctx.p.gjMode ? "gj" : mode;
+    const wanted = ctx.parseIds(ctx.p[listKey]).filter(id => id < 400 && window.player.pu.levelables[id]);
 
     const activated = [];
     let note = "";
