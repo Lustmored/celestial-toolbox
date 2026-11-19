@@ -45,6 +45,44 @@ function ascendPets(ids) {
   return n;
 }
 
+// Summon: wybiera legendarnego peta (Eclipse/Geroa/Vespasian), któremu najmniej brakuje do awansu, klika Summon
+// i awansuje legendarne pety, które mają dość XP.
+function summonLegendary(ctx) {
+  const P = window.player.pet, D = window.Decimal;
+  window.updateClickableTemp("pet");
+  const t = window.tmp.pet.clickables?.[210];
+  if (t?.canClick) {
+    let pick = null;
+    for (let i = 0; i < 3; i++) {
+      const sel = window.tmp.pet.clickables?.[301 + i], id = 501 + i, lt = window.tmp.pet.levelables?.[id];
+      if (!sel?.unlocked || !lt?.unlocked) continue;
+      if (lt.levelLimit !== undefined && window.getLevelableAmount("pet", id).gte(lt.levelLimit)) continue;
+      const need = new D(lt.xpReq).sub(P.levelables[id][1]).max(0);
+      if (!pick || need.lt(pick.need)) pick = { i, id, need };
+    }
+    if (pick) {
+      const prev = P.summonIndex;
+      P.summonIndex = new D(pick.i);
+      window.updateClickableTemp("pet");
+      if (ctx.click("pet", 210, { refresh: true })) { ctx.did(); ctx.log(`Summon → pet ${pick.id} (brakowało ${window.format(pick.need)} XP)`); }
+      else P.summonIndex = prev;
+    }
+  }
+  let n = 0;
+  for (const id of [501, 502, 503]) {
+    for (let k = 0; k < 50; k++) {
+      const lt = window.tmp.pet.levelables?.[id];
+      if (!lt?.unlocked || !lt.canBuy) break;
+      const before = String(window.getLevelableAmount("pet", id));
+      window.buyLevelable("pet", id);
+      window.updateLevelableTemp("pet");
+      if (String(window.getLevelableAmount("pet", id)) === before) break;
+      n++;
+    }
+  }
+  if (n) { ctx.did(n); ctx.log(`Legendarne pety: +${n} poziomów`); }
+}
+
 export const cbClaimAll = {
   id: "cb-claim-all",
   name: "CB Claim All",
@@ -53,10 +91,15 @@ export const cbClaimAll = {
   description:
     "Klika trzy przyciski Claim All w Check Back (XP, skrzynki, Pet Points), dwa Claim All u Marcela (Evo i Paragon Shards) " +
     "oraz gotowe przyciski Dragona (tylko te, które gra Ci pokazuje). Opcjonalnie awansuje pety za zebrane XP " +
-    "i robi Ascend petów, które doszły do limitu poziomu (potem znów awansuje za resztę XP).",
+    "i robi Ascend petów, które doszły do limitu poziomu (potem znów awansuje za resztę XP). " +
+    "Opcjonalnie: odbiera XP Boost (z gotowych przycisków ten z największym zyskiem), potem Legendary Gems, " +
+    "a Summon kieruje do legendarnego peta, któremu najmniej brakuje do awansu, i go awansuje.",
   params: [
     { key: "levelPets", label: "Awansuj pety za zebrane XP", type: "bool", default: true },
     { key: "ascendPets", label: "Ascend petów na limicie poziomu", type: "bool", default: true },
+    { key: "xpBoost", label: "Odbieraj XP Boost (resetuje poziom CB)", type: "bool", default: false },
+    { key: "legGems", label: "Odbieraj Legendary Gems (resetuje poziom i XP Boost)", type: "bool", default: false },
+    { key: "summon", label: "Summon legendarnego peta (najbliżej awansu) + awans", type: "bool", default: false },
   ],
   available: g => g.layerActive("cb"),
   run(ctx) {
@@ -65,6 +108,23 @@ export const cbClaimAll = {
     for (const id of [99, 199]) if (ctx.click("ev8", id)) ctx.did();
     // Dragon: przyciski 1–3 (złoto) i 4–6; ctx.click pomija ukryte i nieodblokowane.
     for (let id = 1; id <= 6; id++) if (ctx.click("ep1", id)) ctx.did();
+
+    // XP Boost: każdy przycisk resetuje poziom CB, więc z gotowych bierzemy ten z największym zyskiem;
+    // pozostałe poczekają, aż poziom znów dobije do ich progu.
+    if (ctx.p.xpBoost && !window.tmp.cb.deactivated) {
+      const bt = window.player.cb.boostTimers ?? [];
+      window.updateClickableTemp("cb");
+      let best = -1;
+      for (let i = 0; i < 3; i++) {
+        const t = window.tmp.cb.clickables?.[301 + i];
+        if (!t?.unlocked || !t.canClick) continue;
+        if (best < 0 || window.Decimal.gt(bt[i].base, bt[best].base)) best = i;
+      }
+      if (best >= 0 && ctx.click("cb", 301 + best)) { ctx.did(); ctx.log(`XP Boost +${window.format(bt[best].base)}`); }
+    }
+    // Legendary Gems po XP Boost (zysk zależy od XP Boost, a odbiór go zeruje).
+    if (ctx.p.legGems && !window.tmp.pet.deactivated && ctx.click("pet", 201, { refresh: true })) { ctx.did(); ctx.log("Odebrano Legendary Gems"); }
+    if (ctx.p.summon && !window.tmp.pet.deactivated && window.layers.pet?.clickables?.[210]) summonLegendary(ctx);
 
     if (!window.layers.pet?.levelables || !(ctx.p.levelPets || ctx.p.ascendPets)) return;
     window.updateLevelableTemp("pet");
