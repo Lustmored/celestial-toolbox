@@ -192,7 +192,8 @@ export const nectarLoop = {
     { key: "researchPause", label: "Pauza na badanie Hive: maks. czas czekania (s, 0 = nie pauzuj)", type: "number", default: 60, min: 0, step: 10 },
     { key: "researchProbe", label: "Pauza na badanie: próbuj, gdy przy stałym BPS brakuje ≤ tyle × maks. czasu", type: "number", default: 10, min: 1, step: 1 },
     { key: "cellMode", label: "Honey-cells: reset", type: "select", default: "peak",
-      options: [["off", "nie rób"], ["peak", "na szczycie tempa wzrostu cells (log, z pasywnym)"], ["lin", "na szczycie tempa cyklu (stary: zysk ÷ czas)"]] },
+      options: [["off", "nie rób"], ["peak", "na szczycie tempa wzrostu cells (log, z pasywnym)"], ["lin", "na szczycie tempa cyklu (stary: zysk ÷ czas)"], ["ratio", "gdy zysk ≥ K × cells (stały próg)"]] },
+    { key: "cellK", label: "Honey-cells: K dla trybu „stały próg” (reset, gdy zysk ≥ K × cells)", type: "number", default: 0.5, min: 0.05, step: 0.05 },
     { key: "cellJump", label: "Honey-cells: reset od razu, gdy da ≥ tyle × obecne cells (0 = wyłącz)", type: "number", default: 0, min: 0, step: 1 },
     { key: "cellPatience", label: "Honey-cells: szczyt = tyle sekund poniżej najlepszego tempa", type: "number", default: 5, min: 1, step: 1 },
     { key: "honeyUpg", label: "Kupuj ulepszenia Honey", type: "bool", default: true },
@@ -281,6 +282,18 @@ export const nectarLoop = {
       }
     }
     const HC = window.layers.ho?.clickables?.[1];
+    if (ctx.p.cellMode === "ratio" && HC && window.tmp.ho?.layerShown && HC.canClick.call(HC)) {
+      const st = ctx.state, now = ctx.gameTime ? ctx.gameTime() : Date.now() / 1000;
+      st.cellT0 ??= now;
+      const g = new D(P.ho.cellGain);
+      if (g.gt(0) && g.gte(new D(P.ho.cell).mul(ctx.p.cellK)) && now - st.cellT0 >= ctx.p.minGap2) {
+        HC.onClick.call(HC);
+        ctx.did(); ctx.log(`reset Honey: +${window.format(g)} honey-cells po ${(now - st.cellT0).toFixed(1)} s`);
+        st.cellT0 = now; st.cnt = {};
+        ctx.status(`reset Honey: +${window.format(g)} honey-cells`);
+        return;
+      }
+    }
     if ((ctx.p.cellMode === "peak" || ctx.p.cellMode === "lin") && HC && window.tmp.ho?.layerShown) {
       const st = ctx.state, now = ctx.gameTime ? ctx.gameTime() : Date.now() / 1000;
       st.cellT0 ??= now; st.cellBest ??= 0; st.cellBelow ??= 0;
