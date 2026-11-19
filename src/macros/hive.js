@@ -463,3 +463,48 @@ export const twigCollector = {
     }
   },
 };
+
+// Gilding kwiatów: złoci kwiaty w kolejności z listy (tak jak klik w zakładce Gilding: koszt 1/2/3 Golden Seeds
+// za kwiat okrągły/pięciokątny/sześcienny). Pomija kwiaty, których gra jeszcze nie pokazuje do złocenia.
+const GILD_COLORS = [6, 1, 2, 3, 5, 4]; // fiolet, czerwony (pszczoły), niebieski (pyłek), zielony (nektar), żółty (honey-cells), różowy (bee bread)
+const GILD_DEFAULT = (() => {
+  const ids = [601, 602, 603, 604, 605];
+  for (let t = 0; t < 3; t++) for (const c of GILD_COLORS) for (let n = 1; n <= 5; n++) {
+    const id = c * 100 + t * 10 + n;
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids.join(" ");
+})();
+export const flowerGilding = {
+  id: "flower-gilding",
+  name: "Kwiaty: gilding",
+  group: "Hive",
+  every: 1,
+  description:
+    "Złoci kwiaty po kolei z listy, gdy starcza Golden Seeds (koszt: okrągłe 1, pięciokątne 2, sześcienne 3). " +
+    "Domyślnie: 5 okrągłych fioletowych, potem od najtańszych — w każdym koszcie kolory: fiolet, czerwony (pszczoły), " +
+    "niebieski (pyłek), zielony (nektar), żółty (honey-cells), różowy (bee bread). Kwiaty jeszcze niedostępne do złocenia pomija.",
+  params: [
+    { key: "order", label: "Kolejność (ID kwiatów)", type: "text", default: GILD_DEFAULT },
+  ],
+  available: g => g.layerActive("fl") && Boolean(window.player?.fl?.gilding),
+  run(ctx) {
+    const P = window.player.fl, D = window.Decimal, G = window.layers.fl.glossary;
+    let done = 0, next = null;
+    for (const id of ctx.parseIds(ctx.p.order)) {
+      if (!(id in P.gilding) || P.gilding[id] || !G[id]) continue;
+      let vis = true;
+      try { vis = G[id].gildDisplay ? Boolean(G[id].gildDisplay.call(G[id])) : true; } catch (e) { vis = false; }
+      if (!vis) continue;
+      const cost = parseInt(String(id)[1]) + 1;
+      if (new D(P.goldenSeeds).lt(cost)) { next = { id, cost }; break; }
+      P.gilding[id] = true;
+      P.goldenSeeds = new D(P.goldenSeeds).sub(cost);
+      done++;
+      ctx.log(`Gilding: ${G[id].name}`);
+    }
+    if (done) ctx.did(done);
+    ctx.status(next ? `następny: ${G[next.id].name} (${next.cost} GS) · masz ${window.formatWhole(P.goldenSeeds)} GS`
+      : `wszystko z listy pozłocone · ${window.formatWhole(P.goldenSeeds)} GS wolnych`);
+  },
+};
