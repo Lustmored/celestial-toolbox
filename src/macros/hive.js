@@ -183,7 +183,8 @@ export const nectarLoop = {
     "Kupuje dostępne ulepszenia Nectar, a potem robi reset na najwyższym poziomie, na którym zysk jest co najmniej " +
     "R razy większy od tego, co już na nim masz (domyślnie R = 0,25 — najlepsze w testach; 1 = reset podwaja stan). Gdy na danym poziomie masz 0, " +
     "resetuje od razu, jak tylko się da. Jeden reset na takt, od góry w dół. Poziomy, które gra już generuje sama, są pomijane. " +
-    "Honey: kupuje ulepszenia Honey i robi reset za honey-cells na szczycie tempa cyklu (honey-cells z resetu ÷ czas od poprzedniego).",
+    "Honey: kupuje ulepszenia Honey i robi reset za honey-cells na szczycie tempa WZROSTU cells " +
+    "(log(cells + zysk z resetu) − log(cells na starcie cyklu)) ÷ czas — to optimum dla zasobu, który mnoży własną produkcję; uwzględnia pasywny przyrost cells.",
   params: [
     { key: "upgrades", label: "Kupuj ulepszenia Nectar", type: "bool", default: true },
     { key: "ratio2", label: "R: resetuj, gdy zysk ≥ R × stan", type: "number", default: 0.25, min: 0.05, step: 0.05 },
@@ -191,8 +192,8 @@ export const nectarLoop = {
     { key: "researchPause", label: "Pauza na badanie Hive: maks. czas czekania (s, 0 = nie pauzuj)", type: "number", default: 60, min: 0, step: 10 },
     { key: "researchProbe", label: "Pauza na badanie: próbuj, gdy przy stałym BPS brakuje ≤ tyle × maks. czasu", type: "number", default: 10, min: 1, step: 1 },
     { key: "cellMode", label: "Honey-cells: reset", type: "select", default: "peak",
-      options: [["off", "nie rób"], ["peak", "na szczycie tempa cyklu"]] },
-    { key: "cellJump", label: "Honey-cells: reset od razu, gdy da ≥ tyle × obecne cells (0 = wyłącz)", type: "number", default: 10, min: 0, step: 1 },
+      options: [["off", "nie rób"], ["peak", "na szczycie tempa wzrostu cells (log, z pasywnym)"], ["lin", "na szczycie tempa cyklu (stary: zysk ÷ czas)"]] },
+    { key: "cellJump", label: "Honey-cells: reset od razu, gdy da ≥ tyle × obecne cells (0 = wyłącz)", type: "number", default: 0, min: 0, step: 1 },
     { key: "cellPatience", label: "Honey-cells: szczyt = tyle sekund poniżej najlepszego tempa", type: "number", default: 5, min: 1, step: 1 },
     { key: "honeyUpg", label: "Kupuj ulepszenia Honey", type: "bool", default: true },
     { key: "lowerFirst", label: "Ile resetów niższego poziomu przed resetem wyższego", type: "number", default: 5, min: 1, step: 1 },
@@ -225,7 +226,7 @@ export const nectarLoop = {
     //    pszczoły(t) = pszczoły + BPS·(gᵗ − 1)/ln g; jeśli i tak wychodzi > N s, przerywamy pauzę na 30 s.
     // Duży skok honey-cells ma pierwszeństwo przed pauzą na badanie (inaczej seria pauz potrafi blokować reset Honey bardzo długo).
     const HC0 = window.layers.ho?.clickables?.[1];
-    const honeyJump = ctx.p.cellMode === "peak" && ctx.p.cellJump > 0 && HC0 && window.tmp.ho?.layerShown && HC0.canClick.call(HC0)
+    const honeyJump = ctx.p.cellMode !== "off" && ctx.p.cellJump > 0 && HC0 && window.tmp.ho?.layerShown && HC0.canClick.call(HC0)
       && new D(P.ho.cellGain).gt(0) && new D(P.ho.cellGain).gte(new D(P.ho.cell).mul(ctx.p.cellJump));
     if (ctx.p.researchPause > 0 && !window.hasMilestone?.("n", 16) && !honeyJump) {
       const rs = ctx.state.rp || (ctx.state.rp = { active: false, until: 0 });
@@ -280,13 +281,18 @@ export const nectarLoop = {
       }
     }
     const HC = window.layers.ho?.clickables?.[1];
-    if (ctx.p.cellMode === "peak" && HC && window.tmp.ho?.layerShown) {
+    if ((ctx.p.cellMode === "peak" || ctx.p.cellMode === "lin") && HC && window.tmp.ho?.layerShown) {
       const st = ctx.state, now = ctx.gameTime ? ctx.gameTime() : Date.now() / 1000;
       st.cellT0 ??= now; st.cellBest ??= 0; st.cellBelow ??= 0;
+      st.cellC0 ??= new D(P.ho.cell).toString();
       if (now - (st.cellSample ?? 0) >= 1) {
         st.cellSample = now;
         const can = HC.canClick.call(HC);
-        const R = can ? new D(P.ho.cellGain).div(Math.max(1, now - st.cellT0)).toNumber() : 0;
+        // „peak”: honey-cells mnożą produkcję, więc liczy się tempo wzrostu LOGARYTMU cells w cyklu:
+        // (log(cells teraz + zysk z resetu) − log(cells na starcie cyklu)) ÷ czas. Uwzględnia pasywny przyrost cells.
+        const dt = Math.max(1, now - st.cellT0), C0 = new D(st.cellC0), Cn = new D(P.ho.cell), g = new D(P.ho.cellGain);
+        const R = !can ? 0 : ctx.p.cellMode === "lin" || C0.lte(0) ? g.div(dt).toNumber()
+          : (Cn.add(g).max(1).log10().sub(C0.max(1).log10())).toNumber() / dt;
         if (R > st.cellBest) { st.cellBest = R; st.cellBelow = 0; } else if (can) st.cellBelow++;
         // Druga reguła: reset, gdy dałby ≥ X × obecne honey-cells. Nektar rośnie wykładniczo, więc samo „tempo cyklu”
         // potrafi rosnąć bez końca, choć reset dałby już wielokrotność wszystkich cells.
@@ -295,7 +301,7 @@ export const nectarLoop = {
           const g = new D(P.ho.cellGain);
           HC.onClick.call(HC);
           ctx.did(); ctx.log(`reset Honey: +${window.format(g)} honey-cells po ${(now - st.cellT0).toFixed(0)} s`);
-          st.cellT0 = now; st.cellBest = 0; st.cellBelow = 0; st.cnt = {};
+          st.cellT0 = now; st.cellBest = 0; st.cellBelow = 0; st.cnt = {}; st.cellC0 = new D(P.ho.cell).toString();
           ctx.status(`reset Honey: +${window.format(g)} honey-cells`);
           return;
         }
