@@ -419,9 +419,13 @@ export const twigCollector = {
   group: "Hive",
   every: 0,
   description:
-    "W każdej klatce gry przytrzymuje kursor na jednym drzewie (tak jak wciśnięta mysz — ten sam efekt przytrzymania z gry), " +
-    "zaczynając od najwyższego tieru; przy remisie bierze drzewo najbliższe złamania. Ulepszeń nie kupuje.",
-  params: [],
+    "W każdej klatce gry przytrzymuje kursor na jednym drzewie (tak jak wciśnięta mysz — ten sam efekt przytrzymania z gry). " +
+    "Nowe drzewo, które wypadnie na zajęte pole, podnosi tamto o tier (×2 Twigów, ×1,5 HP, zadane obrażenia zostają), " +
+    "więc w trybie „czekaj na max tier” łamie tylko drzewa na maksymalnym tierze, a niższe tylko nadbija, nie dobijając ich. " +
+    "Ulepszeń nie kupuje.",
+  params: [
+    { key: "capOnly", label: "Łam tylko drzewa na maks. tierze (niższe tylko nadbijaj)", type: "bool", default: true },
+  ],
   available: g => g.layerActive("tw") && Boolean(window.layers?.tw?.grid?.onHold),
   run(ctx) {
     const grid = window.layers.tw.grid, st = ctx.state;
@@ -435,13 +439,27 @@ export const twigCollector = {
         if (!best || tier.gt(best.tier) || (tier.eq(best.tier) && hp.lt(best.hp))) best = { id, tier, hp };
       }
     }
+    const cap = new window.Decimal(window.player.tw.twigsCap ?? 0);
+    const hit = new window.Decimal(0.05).mul(window.player.tw.twigsDmg ?? 1);
+    if (best && ctx.p.capOnly && best.tier.lt(cap)) {
+      // brak drzewa na maks. tierze: nadbij najwyższe, ale go nie łam (pęknięcie zmarnowałoby przyszłe podbicia tieru)
+      best = null;
+      for (let r = 1; r <= 5 && !best; r++) for (let c = 1; c <= 8; c++) {
+        const id = r * 100 + c, v = window.getGridData("tw", id);
+        if (v && v[0] > 0 && new window.Decimal(v[2]).gt(hit.mul(1.01))) {
+          const tier = new window.Decimal(v[1]);
+          if (!best || tier.gt(best.tier)) best = { id, tier, hp: new window.Decimal(v[2]) };
+        }
+      }
+    }
     if (best) {
       grid.onHold(window.getGridData("tw", best.id), best.id);
       if (window.getGridData("tw", best.id)[2].lte(0)) { st.broken = (st.broken || 0) + 1; ctx.did(); }
     }
     if (Date.now() - (st.sLast || 0) > 500) {
       st.sLast = Date.now();
-      ctx.status(best ? `drzew: ${n} · łamię tier ${window.formatWhole(best.tier)} · złamane: ${st.broken || 0}` : `czekam na drzewa · złamane: ${st.broken || 0}`);
+      ctx.status(best ? `drzew: ${n} · biję tier ${window.formatWhole(best.tier)} · złamane: ${st.broken || 0}`
+        : n ? `drzew: ${n}, wszystkie nadbite — czekam na maks. tier · złamane: ${st.broken || 0}` : `czekam na drzewa · złamane: ${st.broken || 0}`);
     }
   },
 };
