@@ -22,14 +22,18 @@ export const casinoKiller = {
     "Obsługuje zwykłe karty (ID < 400, koszt 1 wyboru) i legendarne (401–403) — legendarną bierze tylko wtedy, " +
     "gdy gra pokazuje slot legendarny, i czeka, aż uzbiera się jej koszt (402 = 2 wybory). " +
     "Gdy karty nie da się aktywować, przywraca wylosowany wybór. " +
+    "Polowanie na legendarną: gdy wszystkie karty z listy są aktywne, makro bierze wylosowane karty (każdy wybór to nowe losowanie, " +
+    "4% na slot legendarny), a gdy wypadnie legendarna z listy — odkłada wybory na jej koszt (401 = 5, po Noxie 3). " +
     "„Profil w Eclipse”: Eclipse Shards (zwykła lista Eclipse — najpierw trawa i chmury, potem ×ES, /wymaganie resetu ES, " +
     "dłuższy Eclipse, punkty) albo Grass Jump (wymaganie skoku, Grassjumpers, trawa).",
   params: [
     { key: "eclProfile", label: "Profil w Eclipse", type: "select", default: "es",
       options: [["es", "Eclipse Shards (lista „Priorytet w Eclipse”)"], ["gj", "Grass Jump"]] },
     { key: "gj", label: "Priorytet w Eclipse – profil GJ", type: "text", default: "113 213 308 307 108 206 201" },
-    { key: "sma", label: "Priorytet w SMA", type: "text", default: "402 100 302 300 301 203 101 201 306" },
+    { key: "sma", label: "Priorytet w SMA", type: "text", default: "100 302 300 301 203 101 201 306" },
     { key: "eclipse", label: "Priorytet w Eclipse", type: "text", default: "108 112 304 200 303 211 206 307 201 101" },
+    { key: "legFill", label: "Po zapełnieniu listy: dobieraj wylosowane karty, polując na legendarną", type: "bool", default: true },
+    { key: "legendary", label: "Legendarne, na które polować", type: "text", default: "401" },
     { key: "maxPerRun", label: "Maks. kart na jedno uruchomienie", type: "number", default: 10, min: 1, step: 1 },
   ],
   available: g => g.layerActive("pu") && Boolean(window.layers.pu?.clickables?.[10]),
@@ -75,6 +79,28 @@ export const casinoKiller = {
       }
       activated.push(next);
       ctx.did();
+    }
+    // Polowanie na legendarną: lista pełna → zwykłe wylosowane karty jako losowania slotu legendarnego.
+    if (ctx.p.legFill && !wanted.some(id => !hasCard(id))) {
+      const legWanted = ctx.parseIds(ctx.p.legendary).filter(id => id > 400 && id < 500 && !hasCard(id));
+      while (legWanted.length && activated.length < ctx.p.maxPerRun) {
+        const offered = pu.legendarySelectionActive ? Number(pu.selectedPunchcards[4]) : 0;
+        if (legWanted.includes(offered) && !hasCard(offered)) {
+          const cost = legendaryCost(offered);
+          if (pu.storedSelections.lt(cost)) { note = `legendarna ${offered} wylosowana — zbieram ${window.formatWhole(pu.storedSelections)}/${cost} wyborów`; break; }
+          pu.selectionIndex = 4; pu.selectionCost = new window.Decimal(cost);
+          if (ctx.click("pu", 10, { refresh: true }) && hasCard(offered)) { activated.push(offered); ctx.did(); ctx.log(`Legendarna ${offered} aktywowana`); continue; }
+          note = `przycisk nieaktywny dla ${offered}`; break;
+        }
+        if (pu.storedSelections.lt(1)) { note = "polowanie na legendarną: czekam na wybór"; break; }
+        const slot = [0, 1, 2, 3].find(i => { const c = Number(pu.selectedPunchcards[i]); return c > 0 && c < 400 && !hasCard(c); });
+        if (slot === undefined) { note = "polowanie: wszystkie dostępne karty już aktywne — legendarna w tym biegu nie wypadła"; break; }
+        const card = Number(pu.selectedPunchcards[slot]);
+        pu.selectionIndex = slot; pu.selectionCost = new window.Decimal(1);
+        if (!ctx.click("pu", 10, { refresh: true }) || !hasCard(card)) { note = `przycisk nieaktywny dla ${card}`; break; }
+        activated.push(card); ctx.did();
+        note = "polowanie na legendarną";
+      }
     }
     if (activated.length) ctx.status(`${mode}: aktywowano ${activated.join(", ")}` + (note ? ` · ${note}` : ""));
     else ctx.status(`${mode}: ${note}`);
