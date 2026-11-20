@@ -34,6 +34,7 @@ export const casinoKiller = {
     { key: "eclipse", label: "Priorytet w Eclipse", type: "text", default: "108 112 304 200 303 211 206 307 201 101" },
     { key: "legFill", label: "Po zapełnieniu listy: dobieraj wylosowane karty, polując na legendarną", type: "bool", default: true },
     { key: "legendary", label: "Legendarne, na które polować", type: "text", default: "401" },
+    { key: "legForce", label: "Legendarne jak zwykłe karty (bez czekania na 4% slot)", type: "bool", default: true },
     { key: "legAlways", label: "Legendarna wylosowana w trakcie listy: bierz od razu (czeka na jej koszt)", type: "bool", default: true },
     { key: "fill", label: "Polowanie: które wylosowane karty brać najpierw", type: "text", default: "111 209 110 306 203 301 201 101" },
     { key: "maxPerRun", label: "Maks. kart na jedno uruchomienie", type: "number", default: 10, min: 1, step: 1 },
@@ -53,22 +54,28 @@ export const casinoKiller = {
     let note = "";
     const legWanted = ctx.parseIds(ctx.p.legendary).filter(id => id > 400 && id < 500);
     const offeredLeg = () => {
+      if (ctx.p.legForce) {
+        const id = legWanted.find(x => !hasCard(x) && window.run(window.layers.pu.levelables[x]?.canSelect, window.layers.pu.levelables[x]));
+        return id || 0;
+      }
       const c = pu.legendarySelectionActive ? Number(pu.selectedPunchcards[4]) : 0;
       return legWanted.includes(c) && !hasCard(c) ? c : 0;
     };
     const takeLeg = id => {
       const cost = legendaryCost(id);
       if (pu.storedSelections.lt(cost)) return `legendarna ${id} wylosowana — zbieram ${window.formatWhole(pu.storedSelections)}/${cost} wyborów`;
-      pu.selectionIndex = 4; pu.selectionCost = new window.Decimal(cost);
+      const prev = pu.selectedPunchcards[4];
+      pu.selectedPunchcards[4] = id; pu.selectionIndex = 4; pu.selectionCost = new window.Decimal(cost);
       if (ctx.click("pu", 10, { refresh: true }) && hasCard(id)) { activated.push(id); ctx.did(); ctx.log(`Legendarna ${id} aktywowana`); return null; }
+      pu.selectedPunchcards[4] = prev;
       return `przycisk nieaktywny dla ${id}`;
     };
     while (activated.length < ctx.p.maxPerRun) {
-      if (ctx.p.legAlways && offeredLeg()) { const r = takeLeg(offeredLeg()); if (r) { note = r; break; } continue; }
+      if (ctx.p.legAlways && !ctx.p.legForce && offeredLeg()) { const r = takeLeg(offeredLeg()); if (r) { note = r; break; } continue; }
       const missing = wanted.filter(id => !hasCard(id));
       if (!missing.length) { note = "wszystkie karty z listy są aktywne"; break; }
       if (pu.storedSelections.lt(1)) { note = `czekam na wybór (${window.player.universe})`; break; }
-      const legOk = id => id < 400 || pu.legendarySelectionActive;
+      const legOk = id => id < 400 || ctx.p.legForce || (pu.legendarySelectionActive && Number(pu.selectedPunchcards[4]) === id);
       const next = missing.find(id => {
         const card = window.layers.pu.levelables[id];
         return card && legOk(id) && window.run(card.canSelect, card);
