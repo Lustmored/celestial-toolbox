@@ -8,7 +8,7 @@ import { coreFragmentFarm } from "./corefrags.js";
 import { spaceDust } from "./space.js";
 import { petShop, fragmentShop } from "./shops.js";
 import { rocketPassengers } from "./rocket.js";
-import { bhSkillButtons } from "./tweaks.js";
+import { bhSkillButtons, labAutoEnter } from "./tweaks.js";
 import { shipHunter } from "./ship.js";
 import { starExplore } from "./exploration.js";
 import { pollenLoop, nectarLoop, flowerPicker, hiveResearch, twigCollector, flowerGilding } from "./hive.js";
@@ -24,5 +24,5 @@ export default [
   shipHunter, starExplore,
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding,
   numbnessLoop,
-  bhSkillButtons,
+  bhSkillButtons, labAutoEnter,
 ];

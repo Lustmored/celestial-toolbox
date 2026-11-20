@@ -42,3 +42,27 @@ export const bhSkillButtons = {
   onEnable() { patch(); },
   onDisable() { unpatch(); },
 };
+
+// Laboratory: wchodzi do laboratorium (przycisk „Enter the Laboratory”), gdy minie cooldown.
+// Domyślnie tylko w przerwie między walkami (Auto Enter gry czeka 30 s po walce), żeby nie przerywać farmy.
+export const labAutoEnter = {
+  id: "lab-auto-enter",
+  name: "Laboratory: wejście po cooldownie",
+  group: "Black Heart",
+  every: 0.5,
+  description:
+    "Klika „Enter the Laboratory”, gdy cooldown laboratorium dobiegnie końca. Domyślnie czeka, aż skończy się bieżąca walka " +
+    "w BH (Auto Enter gry wznawia farmę 30 s po walce, więc laboratorium wskoczy w tę przerwę). Opcjonalnie przerywa trwającą walkę.",
+  params: [
+    { key: "interrupt", label: "Przerywaj trwającą walkę w BH", type: "bool", default: false },
+  ],
+  available: g => g.layerActive("laboratory") && Boolean(window.layers.laboratory?.clickables?.enter),
+  run(ctx) {
+    const L = window.player.laboratory, stage = window.player.bh.currentStage;
+    if (new window.Decimal(L.cooldown).gt(0)) { ctx.status(`cooldown: ${window.formatTime(L.cooldown)}`); return; }
+    if (stage === "laboratory") { ctx.status("w laboratorium"); return; }
+    if (stage && stage !== "none" && !ctx.p.interrupt) { ctx.status(`gotowe — czekam na koniec walki (${stage})`); return; }
+    const C = window.layers.laboratory.clickables.enter;
+    if (C.canClick.call(C)) { C.onClick.call(C); ctx.did(); ctx.log("Wejście do laboratorium"); ctx.status("wszedłem do laboratorium"); }
+  },
+};
