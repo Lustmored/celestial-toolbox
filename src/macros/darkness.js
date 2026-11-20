@@ -30,10 +30,12 @@ export const casinoKiller = {
     { key: "eclProfile", label: "Profil w Eclipse", type: "select", default: "es",
       options: [["es", "Eclipse Shards (lista „Priorytet w Eclipse”)"], ["gj", "Grass Jump"]] },
     { key: "gj", label: "Priorytet w Eclipse – profil GJ", type: "text", default: "113 213 308 307 108 206 201" },
-    { key: "sma", label: "Priorytet w SMA", type: "text", default: "100 302 300 301 203 101 201 306" },
+    { key: "sma", label: "Priorytet w SMA", type: "text", default: "100 302 300 301 111 209 203 101 201 306" },
     { key: "eclipse", label: "Priorytet w Eclipse", type: "text", default: "108 112 304 200 303 211 206 307 201 101" },
     { key: "legFill", label: "Po zapełnieniu listy: dobieraj wylosowane karty, polując na legendarną", type: "bool", default: true },
     { key: "legendary", label: "Legendarne, na które polować", type: "text", default: "401" },
+    { key: "legAlways", label: "Legendarna wylosowana w trakcie listy: bierz od razu (czeka na jej koszt)", type: "bool", default: true },
+    { key: "fill", label: "Polowanie: które wylosowane karty brać najpierw", type: "text", default: "111 209 110 306 203 301 201 101" },
     { key: "maxPerRun", label: "Maks. kart na jedno uruchomienie", type: "number", default: 10, min: 1, step: 1 },
   ],
   available: g => g.layerActive("pu") && Boolean(window.layers.pu?.clickables?.[10]),
@@ -49,7 +51,20 @@ export const casinoKiller = {
 
     const activated = [];
     let note = "";
+    const legWanted = ctx.parseIds(ctx.p.legendary).filter(id => id > 400 && id < 500);
+    const offeredLeg = () => {
+      const c = pu.legendarySelectionActive ? Number(pu.selectedPunchcards[4]) : 0;
+      return legWanted.includes(c) && !hasCard(c) ? c : 0;
+    };
+    const takeLeg = id => {
+      const cost = legendaryCost(id);
+      if (pu.storedSelections.lt(cost)) return `legendarna ${id} wylosowana — zbieram ${window.formatWhole(pu.storedSelections)}/${cost} wyborów`;
+      pu.selectionIndex = 4; pu.selectionCost = new window.Decimal(cost);
+      if (ctx.click("pu", 10, { refresh: true }) && hasCard(id)) { activated.push(id); ctx.did(); ctx.log(`Legendarna ${id} aktywowana`); return null; }
+      return `przycisk nieaktywny dla ${id}`;
+    };
     while (activated.length < ctx.p.maxPerRun) {
+      if (ctx.p.legAlways && offeredLeg()) { const r = takeLeg(offeredLeg()); if (r) { note = r; break; } continue; }
       const missing = wanted.filter(id => !hasCard(id));
       if (!missing.length) { note = "wszystkie karty z listy są aktywne"; break; }
       if (pu.storedSelections.lt(1)) { note = `czekam na wybór (${window.player.universe})`; break; }
@@ -80,21 +95,16 @@ export const casinoKiller = {
       activated.push(next);
       ctx.did();
     }
-    // Polowanie na legendarną: lista pełna → zwykłe wylosowane karty jako losowania slotu legendarnego.
-    if (ctx.p.legFill && !wanted.some(id => !hasCard(id))) {
-      const legWanted = ctx.parseIds(ctx.p.legendary).filter(id => id > 400 && id < 500 && !hasCard(id));
-      while (legWanted.length && activated.length < ctx.p.maxPerRun) {
-        const offered = pu.legendarySelectionActive ? Number(pu.selectedPunchcards[4]) : 0;
-        if (legWanted.includes(offered) && !hasCard(offered)) {
-          const cost = legendaryCost(offered);
-          if (pu.storedSelections.lt(cost)) { note = `legendarna ${offered} wylosowana — zbieram ${window.formatWhole(pu.storedSelections)}/${cost} wyborów`; break; }
-          pu.selectionIndex = 4; pu.selectionCost = new window.Decimal(cost);
-          if (ctx.click("pu", 10, { refresh: true }) && hasCard(offered)) { activated.push(offered); ctx.did(); ctx.log(`Legendarna ${offered} aktywowana`); continue; }
-          note = `przycisk nieaktywny dla ${offered}`; break;
-        }
+    // Polowanie na legendarną: lista pełna → wylosowane karty jako kolejne losowania slotu legendarnego.
+    if (ctx.p.legFill && !note.startsWith("legendarna") && !wanted.some(id => !hasCard(id))) {
+      const fill = ctx.parseIds(ctx.p.fill);
+      const rank = c => { const i = fill.indexOf(c); return i < 0 ? 999 : i; };
+      while (legWanted.some(id => !hasCard(id)) && activated.length < ctx.p.maxPerRun) {
+        if (offeredLeg()) { const r = takeLeg(offeredLeg()); if (r) { note = r; break; } continue; }
         if (pu.storedSelections.lt(1)) { note = "polowanie na legendarną: czekam na wybór"; break; }
-        const slot = [0, 1, 2, 3].find(i => { const c = Number(pu.selectedPunchcards[i]); return c > 0 && c < 400 && !hasCard(c); });
-        if (slot === undefined) { note = "polowanie: wszystkie dostępne karty już aktywne — legendarna w tym biegu nie wypadła"; break; }
+        const slots = [0, 1, 2, 3].filter(i => { const c = Number(pu.selectedPunchcards[i]); return c > 0 && c < 400 && !hasCard(c); });
+        if (!slots.length) { note = "polowanie: wszystkie dostępne karty już aktywne — legendarna w tym biegu nie wypadła"; break; }
+        const slot = slots.sort((x, y) => rank(Number(pu.selectedPunchcards[x])) - rank(Number(pu.selectedPunchcards[y])))[0];
         const card = Number(pu.selectedPunchcards[slot]);
         pu.selectionIndex = slot; pu.selectionCost = new window.Decimal(1);
         if (!ctx.click("pu", 10, { refresh: true }) || !hasCard(card)) { note = `przycisk nieaktywny dla ${card}`; break; }
