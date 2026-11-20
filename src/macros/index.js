@@ -13,6 +13,7 @@ import { shipHunter } from "./ship.js";
 import { starExplore } from "./exploration.js";
 import { pollenLoop, nectarLoop, flowerPicker, hiveResearch, twigCollector, flowerGilding } from "./hive.js";
 import { numbnessLoop } from "./numbness.js";
+import { coinFlipper } from "./zar.js";
 
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -24,5 +25,6 @@ export default [
   shipHunter, starExplore,
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding,
   numbnessLoop,
+  coinFlipper,
   bhSkillButtons, labAutoEnter,
 ];
