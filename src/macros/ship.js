@@ -2,7 +2,7 @@
 // Strzela autoshoot gry (player.ir.autoShoot); bot niczego nie dodaje ani nie zmienia w stanie gry poza wciśniętymi klawiszami.
 
 const Hunter = (() => {
-  const CFG = { horizon: 40, margin: 14, turnFrames: 12, standoffMax: 260, scan: 700, allowMouse: false, aimNear: 1500, aimFar: 400, softW: 80, softR: 8, orbW: 3000, autoUpgrade: true };
+  const CFG = { horizon: 40, margin: 14, turnFrames: 12, standoffMax: 260, scan: 700, allowMouse: false, aimNear: 1500, aimFar: 400, softW: 80, softR: 8, orbW: 3000, autoUpgrade: true, chaseAcc: 0.2, crossW: 400, crossR: 450 };
   const KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
   const KIND = { 0: 'rot', 1: 'rot', 2: 'rot', 4: 'rot', 6: 'rot', 9: 'rot', 10: 'rot', 5: 'omni', 8: 'omni', 11: 'omni', 3: 'mouse', 7: 'mouse' };
   let enabled = false, watchdog = null, target = null, lastPlan = null;
@@ -114,12 +114,14 @@ const Hunter = (() => {
 
     // ---- common core 1: threats in ship-relative wrapped coords
     const T = [];
-    const add = (o, r, w, vx, vy) => {
+    const add = (o, r, w, vx, vy, chase) => {
       const [x, y] = rel(o);
-      if (Math.hypot(x, y) - r < CFG.scan) T.push({ x, y, vx: vx || 0, vy: vy || 0, r: r + shipR + CFG.margin, w });
+      if (Math.hypot(x, y) - r < CFG.scan) T.push({ x, y, vx: vx || 0, vy: vy || 0, r: r + shipR + CFG.margin, w, chase, damp: o.dvx || 0.975 });
     };
+    // Wrogowie (np. Delta Ship) potrafią nagle przyspieszyć w stronę statku — zakładamy najgorszy przypadek:
+    // pościg z przyspieszeniem CFG.chaseAcc/klatkę zamiast ruchu jednostajnego.
     if (!ram) { // rammers WANT body contact (they take 1/50 body damage)
-      for (const e of a.enemies) if (!e.attached && !e._pausedBoss) add(e, e.radius || 20, 1, e.vx, e.vy);
+      for (const e of a.enemies) if (!e.attached && !e._pausedBoss) add(e, e.radius || 20, 1, e.vx, e.vy, CFG.chaseAcc > 0);
       for (const e of a.asteroids) if (!e._pausedBoss) add(e, e.radius || e.size || 20, 1, e.vx, e.vy);
     }
     for (const b of a.bullets) {
@@ -177,8 +179,21 @@ const Hunter = (() => {
     // Kontynuacja poprzedniego planu (MPC z pamięcią): bez tego bot co klatkę zmienia zdanie i „drga” na A/D.
     let cands = ctl.cands(c);
     if (kind == 'rot' && lastPlan && lastPlan[2] > 1) cands = cands.concat([[lastPlan[0], lastPlan[1], lastPlan[2] - 1, lastPlan[3]]]);
+    // Strzelcy w pobliżu: do kosztu dochodzi „bycie między wrogami” (ostrzał z dwóch stron, którego pocisków jeszcze nie ma).
+    const shooters = ram ? [] : a.enemies.filter(e => alive(e) && !e._pausedBoss).map(e => { const [x, y] = rel(e); return { x, y, vx: e.vx || 0, vy: e.vy || 0 }; })
+      .filter(e => Math.hypot(e.x, e.y) < CFG.crossR + 300);
+    const crossCost = (qx, qy, t) => {
+      let n = 0, sx = 0, sy = 0;
+      for (const e of shooters) {
+        const dx = e.x + e.vx * t - qx, dy = e.y + e.vy * t - qy, d = Math.hypot(dx, dy);
+        if (d > CFG.crossR || d < 1) continue;
+        const w = 1 - d / CFG.crossR; n += w; sx += dx / d * w; sy += dy / d * w;
+      }
+      return n > 1 ? CFG.crossW * (n - Math.hypot(sx, sy)) : 0; // 0 gdy wszyscy z jednej strony, rośnie, gdy otaczają
+    };
     for (const cand of cands) {
       const q = ctl.init(s); let cost = 0, aimSum = 0;
+      const sim = T.map(th => th.chase ? { x: th.x, y: th.y, vx: th.vx, vy: th.vy } : null);
       const orbs = O.map(o => ({ x: o.x, y: o.y, timer: o.timer, got: false }));
       for (let t = 1; t <= N; t++) {
         ctl.step(q, cand, t, c);
@@ -188,8 +203,15 @@ const Hunter = (() => {
           if (d < 30) { o.got = true; continue; }
           if (d > 5) { o.x += dx / d * 2; o.y += dy / d * 2; }
         }
-        for (const th of T) {
-          const d = Math.hypot(th.x + th.vx * t - q.x, th.y + th.vy * t - q.y) - th.r;
+        for (let i = 0; i < T.length; i++) {
+          const th = T[i], m = sim[i];
+          let px, py;
+          if (m) {
+            const dx = q.x - m.x, dy = q.y - m.y, dd = Math.hypot(dx, dy) || 1;
+            m.vx = (m.vx + dx / dd * CFG.chaseAcc) * th.damp; m.vy = (m.vy + dy / dd * CFG.chaseAcc) * th.damp;
+            m.x += m.vx; m.y += m.vy; px = m.x; py = m.y;
+          } else { px = th.x + th.vx * t; py = th.y + th.vy * t; }
+          const d = Math.hypot(px - q.x, py - q.y) - th.r;
           cost += d < 0 ? th.w * 1e5 / (1 + t * 0.1) : th.w * CFG.softW * Math.exp(-d / CFG.softR) / (1 + t * 0.05);
         }
         if (target && ram) { const ex = tx + (target.vx || 0) * t - q.x, ey = ty + (target.vy || 0) * t - q.y; q.minD = Math.min(q.minD ?? 1e9, Math.hypot(ex, ey)); }
@@ -198,6 +220,7 @@ const Hunter = (() => {
           aimSum += ctl.aimCost(q, cand, Math.atan2(ey, ex), Math.hypot(ex, ey), c);
         }
       }
+      if (shooters.length > 1) cost += crossCost(q.x, q.y, N);
       if (target) {
         const ex = tx + (target.vx || 0) * N - q.x, ey = ty + (target.vy || 0) * N - q.y, d = Math.hypot(ex, ey);
         // poza zasięgiem: podlatuj (orby nie osłabiają przyciągania), w zasięgu: trzymaj dystans, orby mają pierwszeństwo
@@ -299,6 +322,8 @@ const applyParams = p => {
   Hunter.CFG.orbW = (p.orbPriority ?? 100) * 30;
   Hunter.CFG.autoUpgrade = p.autoUpgrade ?? true;
   Hunter.CFG.upgMode = p.upgMode || 'xp';
+  Hunter.CFG.chaseAcc = (p.chase ?? 100) / 100 * 0.2;
+  Hunter.CFG.crossW = (p.cross ?? 100) * 4;
 };
 
 export const shipHunter = {
@@ -319,6 +344,8 @@ export const shipHunter = {
   params: [
     { key: "aggression", label: "Agresja celowania (0–200, więcej = mocniej trzyma cel na muszce)", type: "number", default: 100, min: 0, step: 10 },
     { key: "margin", label: "Margines bezpieczeństwa (px)", type: "number", default: 14, min: 0, step: 2 },
+    { key: "chase", label: "Ostrożność wobec szarżujących wrogów (0–200; 100 = zakłada przyspieszenie jak Delta Ship)", type: "number", default: 100, min: 0, step: 10 },
+    { key: "cross", label: "Unikanie bycia między wrogami (0–200)", type: "number", default: 100, min: 0, step: 10 },
     { key: "orbPriority", label: "Priorytet zbierania XP (0–200)", type: "number", default: 100, min: 0, step: 10 },
     { key: "autoUpgrade", label: "Sam wybieraj ulepszenia po level upie", type: "bool", default: true },
     { key: "upgMode", label: "Build ulepszeń", type: "select", default: "xp",
