@@ -53,6 +53,7 @@ export const pollenLoop = {
     { key: "saveForN", label: "Zbieraj na ulepszenie, jeśli kosztuje ≤ tyle partii", type: "number", default: 5, min: 0, step: 1 },
     { key: "bbMode", label: "Bee Bread: reset", type: "select", default: "peak",
       options: [["off", "nie rób"], ["peak", "na szczycie tempa cyklu"]] },
+    { key: "bbStopAuto", label: "Bee Bread: nie resetuj, gdy masz Honeycomb (10, 3) — 1% zysku/s", type: "bool", default: true },
     { key: "bbJump", label: "Bee Bread: reset od razu, gdy da ≥ tyle × obecne BB/s (0 = wyłącz)", type: "number", default: 3, min: 0, step: 1 },
     { key: "bbPatience", label: "Szczyt tempa: ile partii z rzędu poniżej najlepszego", type: "number", default: 3, min: 1, step: 1 },
     { key: "bbTier", label: "Bee Bread: tier od razu, gdy dostępny", type: "bool", default: true },
@@ -73,7 +74,7 @@ export const pollenLoop = {
       ctx.did(); ctx.log(`tier Bee Bread → ${window.format(P.bb.breadTier)}`);
       st.phase = "build"; st.cycleT = 0; st.bestR = 0; st.below = 0;
     }
-    const bbOn = ctx.p.bbMode !== "off" && BBC?.[11];
+    const bbOn = ctx.p.bbMode !== "off" && BBC?.[11] && !(ctx.p.bbStopAuto !== false && window.hasUpgrade("al", 130));
     st.phase ??= "build"; st.cycleT ??= 0;
     const harvesting = bbOn && ctx.p.bbMode === "harvest" && st.phase === "harvest";
 
@@ -194,6 +195,7 @@ export const nectarLoop = {
     { key: "cellMode", label: "Honey-cells: reset", type: "select", default: "peak",
       options: [["off", "nie rób"], ["peak", "na szczycie tempa wzrostu cells (log, z pasywnym)"], ["lin", "na szczycie tempa cyklu (stary: zysk ÷ czas)"], ["ratio", "gdy zysk ≥ K × cells (stały próg)"]] },
     { key: "cellK", label: "Honey-cells: K dla trybu „stały próg” (reset, gdy zysk ≥ K × cells)", type: "number", default: 0.5, min: 0.05, step: 0.05 },
+    { key: "cellStopAuto", label: "Honey-cells: nie resetuj, gdy masz Royal J. (10, 3) — 1% zysku/s", type: "bool", default: true },
     { key: "cellJump", label: "Honey-cells: reset od razu, gdy da ≥ tyle × obecne cells (0 = wyłącz)", type: "number", default: 0, min: 0, step: 1 },
     { key: "cellPatience", label: "Honey-cells: szczyt = tyle sekund poniżej najlepszego tempa", type: "number", default: 5, min: 1, step: 1 },
     { key: "honeyUpg", label: "Kupuj ulepszenia Honey", type: "bool", default: true },
@@ -226,8 +228,9 @@ export const nectarLoop = {
     //  - w trakcie mierzymy tempo wzrostu BPS (g na sekundę) i liczymy czas z uwzględnieniem wzrostu:
     //    pszczoły(t) = pszczoły + BPS·(gᵗ − 1)/ln g; jeśli i tak wychodzi > N s, przerywamy pauzę na 30 s.
     // Duży skok honey-cells ma pierwszeństwo przed pauzą na badanie (inaczej seria pauz potrafi blokować reset Honey bardzo długo).
+    const honeyAuto = ctx.p.cellStopAuto !== false && window.hasUpgrade("al", 230);
     const HC0 = window.layers.ho?.clickables?.[1];
-    const honeyJump = ctx.p.cellMode !== "off" && ctx.p.cellJump > 0 && HC0 && window.tmp.ho?.layerShown && HC0.canClick.call(HC0)
+    const honeyJump = !honeyAuto && ctx.p.cellMode !== "off" && ctx.p.cellJump > 0 && HC0 && window.tmp.ho?.layerShown && HC0.canClick.call(HC0)
       && new D(P.ho.cellGain).gt(0) && new D(P.ho.cellGain).gte(new D(P.ho.cell).mul(ctx.p.cellJump));
     if (ctx.p.researchPause > 0 && !window.hasMilestone?.("n", 16) && !honeyJump) {
       const rs = ctx.state.rp || (ctx.state.rp = { active: false, until: 0 });
@@ -282,7 +285,7 @@ export const nectarLoop = {
       }
     }
     const HC = window.layers.ho?.clickables?.[1];
-    if (ctx.p.cellMode === "ratio" && HC && window.tmp.ho?.layerShown && HC.canClick.call(HC)) {
+    if (!honeyAuto && ctx.p.cellMode === "ratio" && HC && window.tmp.ho?.layerShown && HC.canClick.call(HC)) {
       const st = ctx.state, now = ctx.gameTime ? ctx.gameTime() : Date.now() / 1000;
       st.cellT0 ??= now;
       const g = new D(P.ho.cellGain);
@@ -294,7 +297,7 @@ export const nectarLoop = {
         return;
       }
     }
-    if ((ctx.p.cellMode === "peak" || ctx.p.cellMode === "lin") && HC && window.tmp.ho?.layerShown) {
+    if (!honeyAuto && (ctx.p.cellMode === "peak" || ctx.p.cellMode === "lin") && HC && window.tmp.ho?.layerShown) {
       const st = ctx.state, now = ctx.gameTime ? ctx.gameTime() : Date.now() / 1000;
       st.cellT0 ??= now; st.cellBest ??= 0; st.cellBelow ??= 0;
       st.cellC0 ??= new D(P.ho.cell).toString();
