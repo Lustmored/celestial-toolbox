@@ -2,6 +2,15 @@
 
 const hasCard = id => window.getLevelableTier("pu", id, true) === true;
 
+/** Koszt legendarnej karty w wyborach — tak samo jak liczy gra (pu.update). */
+function legendaryCost(id) {
+  const P = window.player;
+  if (id === 401) return P.bl?.noxDefeated ? 3 : 5;
+  if (id === 402) return 2;
+  if (id === 403) return window.hasUpgrade("mr", 15) ? 8 : 9;
+  return Infinity;
+}
+
 export const casinoKiller = {
   id: "casino-killer",
   name: "Casino Killer",
@@ -10,14 +19,16 @@ export const casinoKiller = {
   description:
     "Dopóki są zapisane wybory punchcardów, aktywuje kolejne brakujące karty z listy priorytetów dla bieżącego trybu " +
     "(Eclipse / SMA) zamiast wylosowanych — kilka naraz, jeśli wyborów starczy. " +
-    "Obsługuje karty o koszcie 1 wyboru (ID < 400). Gdy karty nie da się aktywować, przywraca wylosowany wybór. " +
+    "Obsługuje zwykłe karty (ID < 400, koszt 1 wyboru) i legendarne (401–403) — legendarną bierze tylko wtedy, " +
+    "gdy gra pokazuje slot legendarny, i czeka, aż uzbiera się jej koszt (402 = 2 wybory). " +
+    "Gdy karty nie da się aktywować, przywraca wylosowany wybór. " +
     "„Profil w Eclipse”: Eclipse Shards (zwykła lista Eclipse — najpierw trawa i chmury, potem ×ES, /wymaganie resetu ES, " +
     "dłuższy Eclipse, punkty) albo Grass Jump (wymaganie skoku, Grassjumpers, trawa).",
   params: [
     { key: "eclProfile", label: "Profil w Eclipse", type: "select", default: "es",
       options: [["es", "Eclipse Shards (lista „Priorytet w Eclipse”)"], ["gj", "Grass Jump"]] },
     { key: "gj", label: "Priorytet w Eclipse – profil GJ", type: "text", default: "113 213 308 307 108 206 201" },
-    { key: "sma", label: "Priorytet w SMA", type: "text", default: "100 302 300 301 203 101 201 306" },
+    { key: "sma", label: "Priorytet w SMA", type: "text", default: "402 100 302 300 301 203 101 201 306" },
     { key: "eclipse", label: "Priorytet w Eclipse", type: "text", default: "108 112 304 200 303 211 206 307 201 101" },
     { key: "maxPerRun", label: "Maks. kart na jedno uruchomienie", type: "number", default: 10, min: 1, step: 1 },
   ],
@@ -30,7 +41,7 @@ export const casinoKiller = {
     if (!mode) { ctx.status("poza SMA i Eclipse — wybory czekają na bieg"); return; }
     const prof = ctx.p.eclProfile;
     const listKey = mode === "eclipse" && prof === "gj" ? "gj" : mode;
-    const wanted = ctx.parseIds(ctx.p[listKey]).filter(id => id < 400 && window.player.pu.levelables[id]);
+    const wanted = ctx.parseIds(ctx.p[listKey]).filter(id => (id < 400 || (id > 400 && id < 500)) && window.player.pu.levelables[id]);
 
     const activated = [];
     let note = "";
@@ -38,19 +49,24 @@ export const casinoKiller = {
       const missing = wanted.filter(id => !hasCard(id));
       if (!missing.length) { note = "wszystkie karty z listy są aktywne"; break; }
       if (pu.storedSelections.lt(1)) { note = `czekam na wybór (${window.player.universe})`; break; }
+      const legOk = id => id < 400 || pu.legendarySelectionActive;
       const next = missing.find(id => {
         const card = window.layers.pu.levelables[id];
-        return card && window.run(card.canSelect, card);
+        return card && legOk(id) && window.run(card.canSelect, card);
       });
       if (next === undefined) { note = `karty ${missing.join(", ")} niedostępne`; break; }
+      const leg = next > 400;
+      const cost = leg ? legendaryCost(next) : 1;
+      if (pu.storedSelections.lt(cost)) { note = `czekam na ${cost} wybory dla ${next} (mam ${window.formatWhole(pu.storedSelections)})`; break; }
 
-      const prev = { card: pu.selectedPunchcards[0], index: pu.selectionIndex, cost: pu.selectionCost };
-      pu.selectedPunchcards[0] = next;
-      pu.selectionIndex = 0;
-      pu.selectionCost = new window.Decimal(1);
+      const slot = leg ? 4 : 0;
+      const prev = { card: pu.selectedPunchcards[slot], index: pu.selectionIndex, cost: pu.selectionCost };
+      pu.selectedPunchcards[slot] = next;
+      pu.selectionIndex = slot;
+      pu.selectionCost = new window.Decimal(cost);
       if (!ctx.click("pu", 10, { refresh: true }) || !hasCard(next)) {
         // Nie udało się — nie zostawiamy podmienionej karty w wyborze.
-        pu.selectedPunchcards[0] = prev.card;
+        pu.selectedPunchcards[slot] = prev.card;
         pu.selectionIndex = prev.index;
         pu.selectionCost = prev.cost;
         window.updateClickableTemp("pu");
