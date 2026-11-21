@@ -85,6 +85,7 @@ export const coinFlipper = {
       default: "12:10 11:5 14:5 13:2" },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
+    { key: "reduceWheel", label: "Klikaj „Reduce wheels spun” po cooldownie (tańsze obroty, nieco mniej wheel points)", type: "bool", default: true },
     { key: "runFrac", label: "…albo gdy brakujący czas ≤ tej części czasu od ostatniego obrotu", type: "number", default: 0.5, min: 0, step: 0.1 },
     { key: "buyWheel", label: "Kupuj buyable koła za wheel points", type: "bool", default: true },
     { key: "wheelWeights", label: "Wagi koła (11 heads/tails, 12 długość rzutu, 13 wheel points, 14 softcap h/t, 15 softcap CP, 16 cooldown Reduce)", type: "text",
@@ -143,6 +144,13 @@ export const coinFlipper = {
 
     if (ctx.p.reduce && D(cf.reductionCooldown).lte(0) && D(cf.coinsFlipped).gte(6)) {
       W().clickClickable("cf", 13);
+      ctx.did();
+    }
+
+    if (wheelOn && ctx.p.reduceWheel && D(wof.reductionCooldown).lte(0) && D(wof.wheelsSpinned).gte(7)) {
+      const before = D(wof.wheelsSpinned);
+      W().clickClickable("wof", 12);
+      ctx.log(`Reduce wheels: ${W().formatWhole(before)} → ${W().formatWhole(wof.wheelsSpinned)} obrotów`);
       ctx.did();
     }
 
