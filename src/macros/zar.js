@@ -100,6 +100,9 @@ export const coinFlipper = {
     { key: "buyCP", label: "Kupuj buyable za chance points", type: "bool", default: true },
     { key: "cpWeights", label: "Wagi chance points (11 heads/tails, 12 CP, 13 softcap CP, 14 ^efekty)", type: "text",
       default: "12:10 11:5 14:5 13:2" },
+    { key: "upgSave", label: "Oszczędzaj CP na następne ulepszenie Zar, gdy osiągalne w…", type: "bool", default: true },
+    { key: "upgSec", label: "…tylu sekundach (z softcapem)", type: "number", default: 300, min: 0, step: 30 },
+    { key: "upgBuy", label: "Kupuj to ulepszenie od razu, gdy stać", type: "bool", default: true },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
     { key: "reduceWheel", label: "Klikaj „Reduce wheels spun” po cooldownie (tańsze obroty, nieco mniej wheel points)", type: "bool", default: true },
@@ -124,7 +127,29 @@ export const coinFlipper = {
 
     let saving = false;
     const dumpOn = ctx.p.spinDump !== false && !(P.sm?.buyables?.[103] && D(P.sm.buyables[103]).gte(1));
-    if (wheelOn && ctx.p.spin) {
+
+    // Główne ulepszenia Zar (za chance points): gdy następne jest w zasięgu, nie wydajemy CP i nie kręcimy (obrót zeruje CP).
+    let upgHold = false;
+    if (ctx.p.upgSave) {
+      const T = W().tmp.za?.upgrades ?? {};
+      const next = Object.keys(W().layers.za.upgrades).filter(id => !isNaN(+id)).map(Number).sort((a, b) => a - b)
+        .find(id => T[id]?.unlocked && !W().hasUpgrade("za", id));
+      if (next !== undefined) {
+        const cost = D(T[next].cost);
+        if (D(P.za.chancePoints).gte(cost) && ctx.p.upgBuy) {
+          W().buyUpgrade("za", next);
+          if (W().hasUpgrade("za", next)) { ctx.log(`Kupiono ulepszenie Zar ${next} (${W().format(cost)} CP)`); ctx.did(); }
+        } else {
+          const eta = cpEta(cost);
+          if (eta <= ctx.p.upgSec) {
+            upgHold = saving = true;
+            parts.push(`oszczędzam na ulepszenie Zar ${next}: ${W().format(P.za.chancePoints)}/${W().format(cost)} CP (~${W().formatTime(eta)})`);
+          }
+        }
+      }
+    }
+
+    if (wheelOn && ctx.p.spin && !upgHold) {
       if (dumpOn && ctx.state.saving && spinDump()) { ctx.did(); W().updateTemp?.(); }
       const cp = D(P.za.chancePoints), cost = D(wof.spinCost);
       if (cp.gte(cost)) {
@@ -181,7 +206,7 @@ export const coinFlipper = {
     if (ctx.p.buy && !smAuto) {
       const w = parseWeights(ctx.p.weights);
       if (dumpOn && wheelOn && ctx.p.spin) { delete w[24]; delete w[34]; } // te kupujemy hurtem tuż przed obrotem
-      if (!saving) n += buyGroup("cf", HEADS, w) + buyGroup("cf", TAILS, w);
+      if (!saving || upgHold) n += buyGroup("cf", HEADS, w) + buyGroup("cf", TAILS, w);
     }
     if (ctx.p.buyCP && !saving && !smAuto) n += buyGroup("cf", CP_BUY, parseWeights(ctx.p.cpWeights));
     if (wheelOn && ctx.p.buyWheel) n += buyGroup("wof", WHEEL, parseWeights(ctx.p.wheelWeights));
