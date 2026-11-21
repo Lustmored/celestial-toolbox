@@ -66,3 +66,50 @@ export const labAutoEnter = {
     if (C.canClick.call(C)) { C.onClick.call(C); ctx.did(); ctx.log("Wejście do laboratorium"); ctx.status("wszedłem do laboratorium"); }
   },
 };
+
+// Softcapy w nagłówkach: linia „SOFTCAP…” zwraca "" poniżej progu, więc znika i cała zakładka skacze
+// przy każdym szybkim resecie. Podmieniamy pusty wynik na niełamliwą spację — linia trzyma wysokość.
+const SC_RE = /oftcap|hardcap/i;
+let scPatched = [];
+
+function scWalk(node, fnode) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node) && node[0] === "raw-html" && typeof node[1] === "function" && !node[1].__ctbOrig && SC_RE.test(String(node[1]))) {
+    const orig = node[1];
+    const wrapped = function (...a) { const r = orig.apply(this, a); return r === "" || r == null ? "&nbsp;" : r; };
+    wrapped.__ctbOrig = orig;
+    node[1] = wrapped;
+    if (fnode && typeof fnode[1] === "function") fnode[1] = wrapped;
+    scPatched.push([node, fnode, orig]);
+    return;
+  }
+  for (const k of Object.keys(node)) {
+    const v = node[k];
+    if (v && typeof v === "object" && !(v instanceof window.Decimal)) scWalk(v, fnode && typeof fnode === "object" ? fnode[k] : undefined);
+  }
+}
+
+export const stableSoftcaps = {
+  id: "tweak-stable-softcaps",
+  name: "Nieruchome linie softcapów",
+  group: "Wygląd",
+  toggle: true,
+  description:
+    "Linie „SOFTCAP…/HARDCAP…” w nagłówkach zakładek nie znikają poniżej progu, tylko zostają jako pusta linia. " +
+    "Dzięki temu przy szybkich resetach (np. Space w SMA) przyciski nie skaczą góra-dół. Tylko wygląd.",
+  available: () => Boolean(window.layers && window.funcs),
+  onEnable() {
+    for (const L of Object.keys(window.layers)) {
+      const l = window.layers[L], f = window.funcs?.[L];
+      if (Array.isArray(l.tabFormat)) scWalk(l.tabFormat, f?.tabFormat);
+      if (l.microtabs) scWalk(l.microtabs, f?.microtabs);
+    }
+  },
+  onDisable() {
+    for (const [node, fnode, orig] of scPatched) {
+      node[1] = orig;
+      if (fnode && typeof fnode[1] === "function") fnode[1] = orig;
+    }
+    scPatched = [];
+  },
+};
