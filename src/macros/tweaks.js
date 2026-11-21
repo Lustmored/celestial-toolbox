@@ -113,3 +113,24 @@ export const stableSoftcaps = {
     scPatched = [];
   },
 };
+
+// Osiągnięcia z complete() trzeba w tej grze kliknąć w zakładce, żeby dały nagrodę — robimy to za gracza.
+export const claimAchievements = {
+  id: "claim-achievements",
+  name: "Odbieraj spełnione osiągnięcia",
+  group: "Inne",
+  every: 2,
+  description:
+    "Część osiągnięć gra przyznaje dopiero po kliknięciu ich w zakładce Achievements (świecą się, ale nagroda nie działa). " +
+    "Makro odbiera je automatycznie, gdy tylko warunek jest spełniony — tak jak kliknięcie, nic ponad to.",
+  available: () => Boolean(window.layers?.achievements?.achievements),
+  run(ctx) {
+    const A = window.layers.achievements.achievements;
+    for (const id of Object.keys(A)) {
+      if (isNaN(+id) || window.hasAchievement("achievements", id)) continue;
+      let ok = false;
+      try { ok = A[id].complete && window.run(A[id].complete, A[id]); } catch {}
+      if (ok) { window.completeAchievement("achievements", id); ctx.log(`Odebrano: ${A[id].name}`); ctx.did(); }
+    }
+  },
+};
