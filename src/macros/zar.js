@@ -69,6 +69,18 @@ function spinDump() {
   return buyGroup("cf", [24], { 24: 1 }, 500) + buyGroup("cf", [34], { 34: 1 }, 500);
 }
 
+/** Koszt obrotu po wydaniu wszystkich obecnych tails na 34 (÷ wymaganie obrotu): 50k·1.5^n, efekt 1 + 0.25·n^1.25. */
+function projectedSpinCost() {
+  const g = W(), cost = D(g.player.wof.spinCost);
+  if (!g.tmp.cf?.buyables?.[34]?.unlocked) return cost;
+  const n = D(g.getBuyableAmount("cf", 34)).toNumber();
+  const tails = D(g.player.cf.tails).toNumber();
+  let k = 0, spent = 0;
+  while (n + k < 250) { const c = 50000 * Math.pow(1.5, n + k); if (spent + c > tails) break; spent += c; k++; }
+  const eff = x => 1 + 0.25 * Math.pow(x, 1.25);
+  return k ? cost.mul(eff(n) / eff(n + k)) : cost;
+}
+
 export const coinFlipper = {
   id: "coin-flipper",
   name: "Coin Flip + Koło: pełna automatyzacja",
@@ -126,7 +138,8 @@ export const coinFlipper = {
           return;
         }
       }
-      const eta = cpEta(cost);
+      // Liczymy czas już z efektem tails wydanych na 34, które i tak kupimy przed obrotem.
+      const eta = cpEta(dumpOn ? projectedSpinCost() : cost);
       // Próg rośnie z czasem od ostatniego obrotu (gdy inwestowanie w rzuty przestaje przyspieszać, i tak dojdziemy do obrotu).
       ctx.state.runStart ??= Date.now();
       const runSec = (Date.now() - ctx.state.runStart) / 1000;
