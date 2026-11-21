@@ -16,6 +16,7 @@ const CP_BUY = [11, 12, 13, 14];
 const HEADS = [21, 22, 23, 24];
 const TAILS = [31, 32, 33, 34];
 const WHEEL = [11, 12, 13, 14, 15, 16];
+const CHIPS = [[101, 104, 107], [102, 105, 108], [103, 106]]; // czerwone, niebieskie, żółte żetony
 
 /** Kupuje w grupie buyable o najniższym koszt/waga; czeka, jeśli na niego nie stać. */
 function buyGroup(layer, ids, weights, limit = 50) {
@@ -103,6 +104,13 @@ export const coinFlipper = {
     { key: "upgSave", label: "Oszczędzaj CP na następne ulepszenie Zar, gdy osiągalne w…", type: "bool", default: true },
     { key: "upgSec", label: "…tylu sekundach (z softcapem)", type: "number", default: 300, min: 0, step: 30 },
     { key: "upgBuy", label: "Kupuj to ulepszenie od razu, gdy stać", type: "bool", default: true },
+    { key: "slots", label: "Sloty: kręć, oszczędzając na nie CP (wstrzymuje koło)", type: "bool", default: true },
+    { key: "slotSec", label: "Sloty: oszczędzaj, gdy brakuje ≤ tylu sekund…", type: "number", default: 120, min: 0, step: 30 },
+    { key: "slotFrac", label: "…albo ≤ tej części czasu od ostatniego obrotu slotów", type: "number", default: 0.5, min: 0, step: 0.1 },
+    { key: "reduceSlots", label: "Klikaj „Reduce slots spun” po cooldownie", type: "bool", default: true },
+    { key: "buyChips", label: "Kupuj buyable za żetony", type: "bool", default: true },
+    { key: "chipWeights", label: "Wagi żetonów (103 auto-Coin Flip, 102 softcap CP, 108 ×żetony, 101 heads/tails, 104/105/106 koło, 107 autospin koła)", type: "text",
+      default: "103:100 102:10 108:8 101:5 104:4 106:3 105:3 107:1" },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
     { key: "reduceWheel", label: "Klikaj „Reduce wheels spun” po cooldownie (tańsze obroty, nieco mniej wheel points)", type: "bool", default: true },
@@ -149,7 +157,45 @@ export const coinFlipper = {
       }
     }
 
-    if (wheelOn && ctx.p.spin && !upgHold) {
+    // Sloty: najdroższy reset (zeruje CP, Coin Flip i całe koło). Gdy obrót slotów w zasięgu — oszczędzamy na niego.
+    let slotHold = false;
+    const sm = P.sm;
+    const smOn = Boolean(ctx.p.slots && sm && W().layers.sm && W().tmp.sm?.layerShown !== false);
+    if (smOn && sm.spinActive) parts.push("sloty się kręcą");
+    if (smOn && !upgHold && !sm.spinActive) {
+      const cost = D(sm.spinCost), cp = D(P.za.chancePoints);
+      if (cp.gte(cost)) {
+        W().clickClickable("sm", 21);
+        if (sm.spinActive) {
+          ctx.state.slotStart = ctx.state.runStart = Date.now(); ctx.state.saving = ctx.state.slotSaving = false;
+          ctx.log(`Sloty: obrót ${W().formatWhole(sm.spinAmount)}, koszt ${W().format(cost)} CP`);
+          ctx.did(); ctx.status("obrót slotów"); return;
+        }
+      }
+      ctx.state.slotStart ??= Date.now();
+      const eta = cpEta(cost);
+      const limit = Math.max(ctx.p.slotSec, (Date.now() - ctx.state.slotStart) / 1000 * ctx.p.slotFrac);
+      if (eta <= limit || (ctx.state.slotSaving && eta <= 3 * limit)) {
+        slotHold = saving = true;
+        parts.push(`oszczędzam na sloty: ${W().format(cp)}/${W().format(cost)} CP (~${W().formatTime(eta)})`);
+      }
+      ctx.state.slotSaving = slotHold;
+    }
+    if (smOn) {
+      if (ctx.p.reduceSlots && D(sm.reductionCooldown).lte(0) && D(sm.spinAmount).gte(2) && !sm.spinActive) {
+        W().clickClickable("sm", 12); ctx.log("Reduce slots spun"); ctx.did();
+      }
+      if (ctx.p.buyChips) {
+        const w = parseWeights(ctx.p.chipWeights);
+        let k = 0; for (const g of CHIPS) k += buyGroup("sm", g, w);
+        if (k) { ctx.did(); parts.push(`żetony: kupiono ${k}`); }
+      }
+    }
+    // Wbudowany autospin koła nie wie o oszczędzaniu — wyłączamy go na ten czas.
+    if (wof && (upgHold || slotHold) && wof.autoSpin) { wof.autoSpin = false; ctx.state.autoSpinWas = true; }
+    else if (wof && !upgHold && !slotHold && ctx.state.autoSpinWas) { wof.autoSpin = true; ctx.state.autoSpinWas = false; }
+
+    if (wheelOn && ctx.p.spin && !upgHold && !slotHold) {
       if (dumpOn && ctx.state.saving && spinDump()) { ctx.did(); W().updateTemp?.(); }
       const cp = D(P.za.chancePoints), cost = D(wof.spinCost);
       if (cp.gte(cost)) {
