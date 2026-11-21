@@ -74,10 +74,7 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-function applyLayout(collapsed) {
-  const w = collapsed ? STRIP : WIDTH;
-  document.documentElement.style.setProperty("--ctb-width", w + "px");
-}
+function applyLayout() {}
 
 function paramInput(macro, p, s) {
   const set = v => { s.params[p.key] = v; save(); };
@@ -152,10 +149,9 @@ export function mountUI(version) {
   if (document.getElementById("celestial-toolbox")) return;
   const st = settings();
 
-  const style = document.createElement("style");
-  style.id = "celestial-toolbox-style";
-  style.textContent = `body { width: calc(100% - var(--ctb-width, ${WIDTH}px)) !important; position: absolute !important; left: 0 !important; top: 0 !important; margin: 0 !important; }`;
-  document.head.append(style);
+  // Panel jest nakładką (position: fixed) — nie zmieniamy stylów strony gry (psuło to m.in. canvas w Star battle).
+  document.getElementById("celestial-toolbox-style")?.remove(); // sprzątanie po starszych wersjach
+  document.documentElement.style.removeProperty("--ctb-width");
 
   const host = h("div", { id: "celestial-toolbox", style: "position:fixed;top:0;right:0;z-index:2147483000;" });
   const shadow = host.attachShadow({ mode: "open" });
@@ -285,7 +281,7 @@ export function mountUI(version) {
   unmountUI = () => {
     window.removeEventListener("keydown", onKey, true);
     clearInterval(refreshTimer); clearInterval(updTimer);
-    host.remove(); style.remove();
+    host.remove();
     document.documentElement.style.removeProperty("--ctb-width");
   };
 }
