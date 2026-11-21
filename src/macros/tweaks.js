@@ -114,6 +114,23 @@ export const stableSoftcaps = {
   },
 };
 
+// Które osiągnięcia leżą w zakładkach, które gracz faktycznie widzi (zakładka ma przycisk i jest odblokowana).
+let visCache = null, visAt = 0;
+function visibleAch() {
+  if (visCache && Date.now() - visAt < 10000) return visCache;
+  const L = window.layers.achievements, out = new Set();
+  const buttons = new Set();
+  const findBtns = n => { if (!Array.isArray(n)) return; if (n[0] === "category-button" && Array.isArray(n[1])) buttons.add(String(n[1][2])); n.forEach(findBtns); };
+  findBtns(L.tabFormat);
+  for (const [k, tab] of Object.entries(L.microtabs?.stars ?? {})) {
+    if (!buttons.has(String(k)) || !window.tmp.achievements?.microtabs?.stars?.[k]?.unlocked) continue;
+    const walk = n => { if (!Array.isArray(n)) return; if (n[0] === "achievement") out.add(+n[1]); n.forEach(walk); };
+    walk(tab.content);
+  }
+  visCache = out; visAt = Date.now();
+  return out;
+}
+
 // Osiągnięcia z complete() trzeba w tej grze kliknąć w zakładce, żeby dały nagrodę — robimy to za gracza.
 export const claimAchievements = {
   id: "claim-achievements",
@@ -129,9 +146,7 @@ export const claimAchievements = {
     const A = window.layers.achievements.achievements;
     for (const id of Object.keys(A)) {
       if (isNaN(+id) || window.hasAchievement("achievements", id)) continue;
-      // Tylko z widocznych zakładek osiągnięć (zakładka = setki ID) — bez odbierania rzeczy, których gracz jeszcze nie widzi.
-      const tab = window.tmp.achievements?.microtabs?.stars?.[Math.floor(+id / 100)];
-      if (tab && !tab.unlocked) continue;
+      if (!visibleAch().has(+id)) continue;
       let ok = false;
       try { ok = A[id].complete && window.run(A[id].complete, A[id]); } catch {}
       if (ok) { window.completeAchievement("achievements", id); ctx.log(`Odebrano: ${A[id].name}`); ctx.did(); }
