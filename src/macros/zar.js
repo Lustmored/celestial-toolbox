@@ -64,6 +64,11 @@ function cpEta(target) {
   return t;
 }
 
+/** Przed obrotem: całe heads w wheel point gain (24), całe tails w wymaganie obrotu (34) — i tak przepadną przy obrocie. */
+function spinDump() {
+  return buyGroup("cf", [24], { 24: 1 }, 500) + buyGroup("cf", [34], { 34: 1 }, 500);
+}
+
 export const coinFlipper = {
   id: "coin-flipper",
   name: "Coin Flip + Koło: pełna automatyzacja",
@@ -86,6 +91,7 @@ export const coinFlipper = {
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
     { key: "reduceWheel", label: "Klikaj „Reduce wheels spun” po cooldownie (tańsze obroty, nieco mniej wheel points)", type: "bool", default: true },
+    { key: "spinDump", label: "Przed obrotem: wszystkie heads → wheel point gain (24), tails → wymaganie obrotu (34)", type: "bool", default: true },
     { key: "runFrac", label: "…albo gdy brakujący czas ≤ tej części czasu od ostatniego obrotu", type: "number", default: 0.5, min: 0, step: 0.1 },
     { key: "buyWheel", label: "Kupuj buyable koła za wheel points", type: "bool", default: true },
     { key: "wheelWeights", label: "Wagi koła (11 heads/tails, 12 długość rzutu, 13 wheel points, 14 softcap h/t, 15 softcap CP, 16 cooldown Reduce)", type: "text",
@@ -105,9 +111,12 @@ export const coinFlipper = {
     }
 
     let saving = false;
+    const dumpOn = ctx.p.spinDump !== false && !(P.sm?.buyables?.[103] && D(P.sm.buyables[103]).gte(1));
     if (wheelOn && ctx.p.spin) {
+      if (dumpOn && ctx.state.saving && spinDump()) { ctx.did(); W().updateTemp?.(); }
       const cp = D(P.za.chancePoints), cost = D(wof.spinCost);
       if (cp.gte(cost)) {
+        if (dumpOn && spinDump()) { ctx.did(); W().updateTemp?.(); }
         W().clickClickable("wof", 201);
         if (wof.spinActive) {
           ctx.state.runStart = Date.now(); ctx.state.saving = false;
@@ -158,7 +167,8 @@ export const coinFlipper = {
     let n = 0;
     if (ctx.p.buy && !smAuto) {
       const w = parseWeights(ctx.p.weights);
-      n += buyGroup("cf", HEADS, w) + buyGroup("cf", TAILS, w);
+      if (dumpOn && wheelOn && ctx.p.spin) { delete w[24]; delete w[34]; } // te kupujemy hurtem tuż przed obrotem
+      if (!saving) n += buyGroup("cf", HEADS, w) + buyGroup("cf", TAILS, w);
     }
     if (ctx.p.buyCP && !saving && !smAuto) n += buyGroup("cf", CP_BUY, parseWeights(ctx.p.cpWeights));
     if (wheelOn && ctx.p.buyWheel) n += buyGroup("wof", WHEEL, parseWeights(ctx.p.wheelWeights));
