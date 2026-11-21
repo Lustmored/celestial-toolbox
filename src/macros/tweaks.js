@@ -122,12 +122,16 @@ export const claimAchievements = {
   every: 2,
   description:
     "Część osiągnięć gra przyznaje dopiero po kliknięciu ich w zakładce Achievements (świecą się, ale nagroda nie działa). " +
-    "Makro odbiera je automatycznie, gdy tylko warunek jest spełniony — tak jak kliknięcie, nic ponad to.",
+    "Makro odbiera je automatycznie, gdy tylko warunek jest spełniony — tak jak kliknięcie, nic ponad to. " +
+    "Tylko z zakładek osiągnięć, które już widzisz.",
   available: () => Boolean(window.layers?.achievements?.achievements),
   run(ctx) {
     const A = window.layers.achievements.achievements;
     for (const id of Object.keys(A)) {
       if (isNaN(+id) || window.hasAchievement("achievements", id)) continue;
+      // Tylko z widocznych zakładek osiągnięć (zakładka = setki ID) — bez odbierania rzeczy, których gracz jeszcze nie widzi.
+      const tab = window.tmp.achievements?.microtabs?.stars?.[Math.floor(+id / 100)];
+      if (tab && !tab.unlocked) continue;
       let ok = false;
       try { ok = A[id].complete && window.run(A[id].complete, A[id]); } catch {}
       if (ok) { window.completeAchievement("achievements", id); ctx.log(`Odebrano: ${A[id].name}`); ctx.did(); }
