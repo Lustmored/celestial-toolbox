@@ -28,14 +28,17 @@ function buyGroup(layer, ids, weights, limit = 50) {
     for (const id of ids) {
       const w = weights[id];
       if (!w || !tmp[id]?.unlocked) continue;
+      if (tmp[id].purchaseLimit !== undefined && D(W().getBuyableAmount(layer, id)).gte(tmp[id].purchaseLimit)) continue;
       const score = D(tmp[id].cost).log10() - Math.log10(w);
       if (score < bestScore) { bestScore = score; best = id; }
     }
     if (best == null) break;
     const B = W().layers[layer].buyables[best];
     if (!B.canAfford.call(B)) break;
+    const before = D(W().getBuyableAmount(layer, best));
     W().buyBuyable(layer, best);
     W().updateBuyableTemp?.(layer);
+    if (D(W().getBuyableAmount(layer, best)).eq(before)) break;
     n++;
   }
   return n;
@@ -319,6 +322,55 @@ export const coinFlipper = {
 
     parts.push(`rzutów ${W().formatWhole(cf.coinsFlipped)}`);
     if (wheelOn) parts.push(`obrót za ${W().format(wof.spinCost)} CP`);
+    ctx.status(parts.join(" · "));
+  },
+};
+
+const SUITS = [[11, 12, 13, 14], [21, 22, 23, 24], [31, 32, 33, 34], [41, 42, 43, 44]];
+
+export const cardsHelper = {
+  id: "cards-helper",
+  name: "Cards: dobieranie, poziomy i buyable kolorów",
+  group: "Universe Epsilon",
+  every: 0.2,
+  description:
+    "Po każdym card resecie odbudowuje Cards: dobiera karty, gdy starcza shredów, klika „Level All” i kupuje buyable za punkty kolorów " +
+    "(pik/kier/karo/trefl — każdy kolor ma własną walutę). Wagi: x1 = mnożnik punktów koloru, x2 = bonus koloru " +
+    "(CP / heads-tails / wheel points / żetony), x3 = shredy, x4 = +karty na dobranie (limit 10). Ulepszenia i buyable za generatory zostają Tobie.",
+  params: [
+    { key: "draw", label: "Dobieraj karty, gdy starcza shredów", type: "bool", default: true },
+    { key: "level", label: "Klikaj „Level All”", type: "bool", default: true },
+    { key: "buy", label: "Kupuj buyable kolorów", type: "bool", default: true },
+    { key: "weights", label: "Wagi w każdym kolorze (x1..x4 → 1..4)", type: "text", default: "4:10 1:5 3:4 2:3" },
+  ],
+  available: () => Boolean(W().player?.car && W().layers.car && W().tmp.car?.layerShown !== false),
+  run(ctx) {
+    const g = W(), car = g.player.car, parts = [];
+    let n = 0;
+    if (ctx.p.draw) {
+      for (let i = 0; i < 20 && D(car.cardShreds).gte(car.cardShredReq); i++) {
+        const before = D(car.cardDrawAmount);
+        g.clickClickable("car", 12);
+        if (D(car.cardDrawAmount).eq(before)) break;
+        n++; g.layers.car.update?.(0); // przelicz koszt następnego dobrania
+      }
+      if (n) parts.push(`dobrano ${n}×`);
+    }
+    if (ctx.p.level) {
+      g.updateClickableTemp?.("car");
+      if (g.tmp.car.clickables?.[2]?.canClick) { g.clickClickable("car", 2); parts.push("Level All"); n++; }
+    }
+    if (ctx.p.buy) {
+      const base = parseWeights(ctx.p.weights);
+      let k = 0;
+      for (const ids of SUITS) {
+        const w = {}; ids.forEach((id, j) => { if (base[j + 1]) w[id] = base[j + 1]; });
+        k += buyGroup("car", ids, w);
+      }
+      if (k) { parts.push(`kupiono ${k}`); n += k; }
+    }
+    if (n) ctx.did();
+    parts.push(`shredy ${g.format(car.cardShreds)}/${g.format(car.cardShredReq)}`);
     ctx.status(parts.join(" · "));
   },
 };
