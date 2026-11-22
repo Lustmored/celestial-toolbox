@@ -16,7 +16,17 @@ const CP_BUY = [11, 12, 13, 14];
 const HEADS = [21, 22, 23, 24];
 const TAILS = [31, 32, 33, 34];
 const WHEEL = [11, 12, 13, 14, 15, 16];
-const CHIPS = [[101, 104, 107], [102, 105, 108], [103, 106]]; // czerwone, niebieskie, żółte żetony
+/** Buyable slotów pogrupowane wg waluty (czerwone/niebieskie/żółte żetony) — każda grupa wydaje osobno. */
+function chipGroups() {
+  const g = W(), out = [[], [], []];
+  for (const id of Object.keys(g.layers.sm.buyables)) {
+    if (isNaN(+id) || +id < 100) continue;
+    const cur = g.layers.sm.buyables[id].currency?.();
+    const i = g.player.sm.chips.indexOf(cur);
+    if (i >= 0) out[i].push(+id);
+  }
+  return out;
+}
 
 /** Kupuje w grupie buyable o najniższym koszt/waga; czeka, jeśli na niego nie stać. */
 function buyGroup(layer, ids, weights, limit = 50) {
@@ -137,12 +147,16 @@ export const coinFlipper = {
     { key: "slotFrac", label: "…albo ≤ tej części czasu od ostatniego obrotu slotów", type: "number", default: 0.5, min: 0, step: 0.1 },
     { key: "reduceSlots", label: "Klikaj „Reduce slots spun” po cooldownie", type: "bool", default: true },
     { key: "buyChips", label: "Kupuj buyable za żetony", type: "bool", default: true },
-    { key: "chipWeights", label: "Wagi żetonów (103 auto-Coin Flip, 102 softcap CP, 108 ×żetony, 101 heads/tails, 104/105/106 koło, 107 autospin koła)", type: "text",
-      default: "103:100 102:10 108:8 101:5 104:4 106:3 105:3 107:1" },
+    { key: "chipWeights", label: "Wagi żetonów (103 auto-Coin Flip, 115 ^CP, 116 ^softcapy, 117 ^żetony, 102 softcap CP, 108 ×żetony, 106 evo shardy z koła, 101 heads/tails, 104/105 koło, 107 autospin)", type: "text",
+      default: "103:100 115:20 116:20 117:20 102:10 108:8 106:6 101:5 104:4 105:3 107:1" },
     { key: "blessings", label: "Blessings (Check Back Shrine) traktuj jak ulepszenia Zar: oszczędzaj i kupuj", type: "bool", default: true },
     { key: "factors", label: "Tuż po obrocie koła/slotów: resztę CP (i tak przepada) na Check Back Factors", type: "bool", default: true },
     { key: "cardReset", label: "Card generators: reset Dice Space, gdy zysk ≥ K × posiadane", type: "bool", default: true },
-    { key: "cardK", label: "K (1 = podwojenie generatorów)", type: "number", default: 1, min: 0.1, step: 0.1 },
+    { key: "cardMode", label: "Moment card resetu", type: "select", default: "rate",
+      options: [["rate", "szczyt tempa (generatory/czas)"], ["ratio", "zysk ≥ K × posiadane"]] },
+    { key: "cardTol", label: "Szczyt tempa: reset, gdy tempo spadnie o ≥ tyle % od szczytu…", type: "number", default: 3, min: 0, step: 1 },
+    { key: "cardPatience", label: "…i nie wraca przez tyle sekund", type: "number", default: 20, min: 0, step: 5 },
+    { key: "cardK", label: "Tryb K: K (1 = podwojenie generatorów)", type: "number", default: 1, min: 0.1, step: 0.1 },
     { key: "cardMin", label: "Minimalny zysk generatorów", type: "number", default: 1, min: 1, step: 1 },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
@@ -168,22 +182,44 @@ export const coinFlipper = {
 
     // Card generators: reset całego Dice Space, gdy zysk ≥ K × posiadane (domyślnie podwojenie).
     const car = P.car;
-    if (ctx.p.cardReset && car && W().layers.car && W().tmp.car?.layerShown !== false && !P.sm?.spinActive && !wof?.spinActive) {
+    let cardHold = false;
+    if (ctx.p.cardReset && car && W().layers.car && W().tmp.car?.layerShown !== false) {
       const get = D(car.cardGeneratorsToGet), have = D(car.cardGenerators);
-      if (get.gte(Math.max(1, ctx.p.cardMin)) && get.gte(have.mul(ctx.p.cardK))) {
+      const now = Date.now();
+      ctx.state.cardStart ??= now;
+      let doReset = false, why = "";
+      if (get.gte(Math.max(1, ctx.p.cardMin))) {
+        // Pierwszy run po włączeniu makra ma nieznany początek — wtedy reguła K, potem już szczyt tempa.
+        if (ctx.p.cardMode === "ratio" || !ctx.state.cardKnown) { doReset = get.gte(have.mul(ctx.p.cardK)); if (!ctx.state.cardKnown) why = " · pierwszy run: reguła K"; }
+        else {
+          // Szczyt tempa: generatory / czas od ostatniego resetu. Resetujemy, gdy tempo spadło poniżej szczytu i nie wraca.
+          const rate = get.toNumber() / Math.max(1, (now - ctx.state.cardStart) / 1000);
+          if (rate >= (ctx.state.cardBest ?? 0)) { ctx.state.cardBest = rate; ctx.state.cardBelow = null; }
+          else if (rate < ctx.state.cardBest * (1 - ctx.p.cardTol / 100)) {
+            ctx.state.cardBelow ??= now;
+            if (now - ctx.state.cardBelow >= ctx.p.cardPatience * 1000) doReset = true;
+          } else ctx.state.cardBelow = null;
+          why = ` · tempo ${(rate * 60).toFixed(2)}/min (szczyt ${((ctx.state.cardBest ?? 0) * 60).toFixed(2)})`;
+        }
+      }
+      if (doReset && (P.sm?.spinActive || wof?.spinActive)) {
+        // Obrót w toku — czekamy na jego koniec, ale nie pozwalamy kolejnym obrotom zjeść CP.
+        cardHold = true; parts.push("card reset po końcu obrotu");
+      } else if (doReset) {
         W().clickClickable("car", 11);
-        ctx.state.slotStart = ctx.state.runStart = Date.now(); ctx.state.saving = ctx.state.slotSaving = false;
+        ctx.state.cardStart = now; ctx.state.cardBest = 0; ctx.state.cardBelow = null; ctx.state.cardKnown = true;
+        ctx.state.slotStart = ctx.state.runStart = now; ctx.state.saving = ctx.state.slotSaving = false;
         ctx.log(`Card reset: +${W().formatWhole(get)} generatorów (było ${W().formatWhole(have)})`);
         ctx.did(); ctx.status("card reset"); return;
       }
-      if (have.gt(0) || get.gt(0)) parts.push(`generatory ${W().formatWhole(have)} (+${W().formatWhole(get)}, reset przy ${W().formatWhole(W().Decimal.max(ctx.p.cardMin, have.mul(ctx.p.cardK)).ceil())})`);
+      if (have.gt(0) || get.gt(0)) parts.push(`generatory ${W().formatWhole(have)} (+${W().formatWhole(get)})${why}`);
     }
 
-    let saving = false;
+    let saving = cardHold;
     const dumpOn = ctx.p.spinDump !== false && !(P.sm?.buyables?.[103] && D(P.sm.buyables[103]).gte(1));
 
     // Główne ulepszenia Zar (za chance points): gdy następne jest w zasięgu, nie wydajemy CP i nie kręcimy (obrót zeruje CP).
-    let upgHold = false;
+    let upgHold = cardHold;
     if (ctx.p.upgSave) {
       const cands = [];
       for (const L of ["za", ...(ctx.p.blessings ? ["cbs"] : [])]) {
@@ -244,7 +280,7 @@ export const coinFlipper = {
       }
       if (ctx.p.buyChips) {
         const w = parseWeights(ctx.p.chipWeights);
-        let k = 0; for (const g of CHIPS) k += buyGroup("sm", g, w);
+        let k = 0; for (const g of chipGroups()) k += buyGroup("sm", g, w);
         if (k) { ctx.did(); parts.push(`żetony: kupiono ${k}`); }
       }
     }
