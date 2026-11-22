@@ -97,26 +97,28 @@ function projectedSpinCost() {
 
 /** Obrót (koła/slotów) i tak wyzeruje CP — resztę wydajemy na Check Back Factors (najtańsze najpierw). */
 const FACTORS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23];
-function factorDump(ctx, reserve) {
+// Factory: CP 11–13, heads 14, tails 15, wheel points 16, żetony 17–19. Przed resetem, który i tak wyzeruje walutę, wydajemy ją.
+const RESET_FACTORS = { wheel: [11, 12, 13, 14, 15], slot: [11, 12, 13, 14, 15, 16], card: [11, 12, 13, 14, 15, 16, 17, 18, 19] };
+function factorDump(ctx, kind, cpReserve) {
   const g = W(), T = g.tmp.cbs?.buyables;
   if (!ctx.p.factors || !T) return 0;
   let n = 0;
-  for (let i = 0; i < 500; i++) {
-    let best = null, bc = null;
-    for (const id of FACTORS) {
-      if (!T[id]?.unlocked) continue;
-      const B = g.layers.cbs.buyables[id];
-      if (B.currency?.() !== g.player.za.chancePoints) continue; // tylko factory za CP
-      const lim = T[id].purchaseLimit; if (lim !== undefined && D(g.getBuyableAmount("cbs", id)).gte(lim)) continue;
-      const c = D(T[id].cost); if (!bc || c.lt(bc)) { bc = c; best = id; }
+  for (const id of RESET_FACTORS[kind]) {
+    if (!T[id]?.unlocked) continue;
+    const B = g.layers.cbs.buyables[id];
+    const isCP = B.currency?.() === g.player.za.chancePoints;
+    for (let i = 0; i < 500; i++) {
+      g.updateBuyableTemp?.("cbs");
+      const lim = T[id].purchaseLimit; if (lim !== undefined && D(g.getBuyableAmount("cbs", id)).gte(lim)) break;
+      if (!B.canAfford.call(B)) break;
+      if (isCP && D(g.player.za.chancePoints).sub(T[id].cost).lt(cpReserve)) break;
+      const before = D(g.getBuyableAmount("cbs", id));
+      g.buyBuyable("cbs", id);
+      if (D(g.getBuyableAmount("cbs", id)).eq(before)) break;
+      n++;
     }
-    if (best == null || D(g.player.za.chancePoints).sub(bc).lt(reserve)) break;
-    const before = D(g.getBuyableAmount("cbs", best));
-    g.buyBuyable("cbs", best); g.updateBuyableTemp?.("cbs");
-    if (D(g.getBuyableAmount("cbs", best)).eq(before)) break;
-    n++;
   }
-  if (n) ctx.log(`Check Back Factors: kupiono ${n} poz. z nadwyżki CP przed obrotem`);
+  if (n) ctx.log(`Check Back Factors: +${n} poz. z walut, które ${kind === "wheel" ? "obrót koła" : kind === "slot" ? "obrót slotów" : "card reset"} i tak wyzeruje`);
   return n;
 }
 
@@ -150,7 +152,7 @@ export const coinFlipper = {
     { key: "chipWeights", label: "Wagi żetonów (103 auto-Coin Flip, 115 ^CP, 116 ^softcapy, 117 ^żetony, 102 softcap CP, 108 ×żetony, 106 evo shardy z koła, 101 heads/tails, 104/105 koło, 107 autospin)", type: "text",
       default: "103:100 115:20 116:20 117:20 102:10 108:8 106:6 101:5 104:4 105:3 107:1" },
     { key: "blessings", label: "Blessings (Check Back Shrine) traktuj jak ulepszenia Zar: oszczędzaj i kupuj", type: "bool", default: true },
-    { key: "factors", label: "Tuż po obrocie koła/slotów: resztę CP (i tak przepada) na Check Back Factors", type: "bool", default: true },
+    { key: "factors", label: "Przed obrotem koła/slotów i card resetem: waluty, które przepadną (CP ponad koszt, heads, tails, wheel points, żetony) na Check Back Factors", type: "bool", default: true },
     { key: "cardReset", label: "Card generators: reset Dice Space, gdy zysk ≥ K × posiadane", type: "bool", default: true },
     { key: "cardMode", label: "Moment card resetu", type: "select", default: "rate",
       options: [["rate", "szczyt tempa (generatory/czas)"], ["ratio", "zysk ≥ K × posiadane"]] },
@@ -206,6 +208,7 @@ export const coinFlipper = {
         // Obrót w toku — czekamy na jego koniec, ale nie pozwalamy kolejnym obrotom zjeść CP.
         cardHold = true; parts.push("card reset po końcu obrotu");
       } else if (doReset) {
+        factorDump(ctx, "card", get.gt(0) ? D(P.za.chancePoints) : D(0)); // CP zostawiamy — od nich zależą generatory
         W().clickClickable("car", 11);
         ctx.state.cardStart = now; ctx.state.cardBest = 0; ctx.state.cardBelow = null; ctx.state.cardKnown = true;
         ctx.state.slotStart = ctx.state.runStart = now; ctx.state.saving = ctx.state.slotSaving = false;
@@ -257,7 +260,7 @@ export const coinFlipper = {
     if (smOn && !upgHold && !sm.spinActive) {
       const cost = D(sm.spinCost), cp = D(P.za.chancePoints);
       if (cp.gte(cost)) {
-        factorDump(ctx, cost);
+        factorDump(ctx, "slot", cost);
         W().clickClickable("sm", 21);
         if (sm.spinActive) {
           ctx.state.slotStart = ctx.state.runStart = Date.now(); ctx.state.saving = ctx.state.slotSaving = false;
@@ -293,7 +296,7 @@ export const coinFlipper = {
       const cp = D(P.za.chancePoints), cost = D(wof.spinCost);
       if (cp.gte(cost)) {
         if (dumpOn && spinDump()) { ctx.did(); W().updateTemp?.(); }
-        factorDump(ctx, D(wof.spinCost));
+        factorDump(ctx, "wheel", D(wof.spinCost));
         W().clickClickable("wof", 201);
         if (wof.spinActive) {
           ctx.state.runStart = Date.now(); ctx.state.saving = false;
