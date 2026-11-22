@@ -10,7 +10,8 @@ const Hunter = (() => {
   const wrapD = (d, size) => { d %= size; return d > size / 2 ? d - size : d < -size / 2 ? d + size : d; };
   const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
   const alive = e => { try { return e.health.gt ? e.health.gt(0) : e.health > 0; } catch (_) { return true; } };
-  const hpFrac = e => { try { return Math.min(1, e.health.div(e.maxHealth).toNumber()); } catch (_) { return 1; } };
+  // Bossowie bywają z `healthMax` zamiast `maxHealth` (np. Ritual Spirit) — bez tego wynik był NaN i boss nigdy nie zostawał celem.
+  const hpFrac = e => { try { const m = e.maxHealth ?? e.healthMax; const f = Math.min(1, (e.health.div ? e.health.div(m) : new Decimal(e.health).div(m)).toNumber()); return Number.isFinite(f) ? f : 1; } catch (_) { return 1; } };
   const release = a => { if (a && a.keys) for (const k of KEYS) a.keys[k] = false; };
   const grid9 = []; for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) grid9.push([i, j]);
   const ROT_CANDS = [];
@@ -152,10 +153,11 @@ const Hunter = (() => {
     // ---- common core 2: target = nearest/weakest enemy (with hysteresis); asteroids as fallback
     const TR = (() => { const bs = st == 8 ? 1e9 : st == 5 ? 14 + ms : st == 11 ? 16 + ms : ({ 4: 25, 6: 20, 9: 12, 10: 20 }[st] || 10) * (ms || 1);
       return st == 8 ? 750 : st == 4 ? 600 : Math.min(bs * 60, 900); })();
-    let pool = a.enemies.filter(e => alive(e) && !e.invulnerable && !e._pausedBoss);
+    // Nietykalny (np. faza bossa) zostaje celem awaryjnym — statek trzyma go na muszce, by strzelać od razu po fazie.
+    let pool = a.enemies.filter(e => alive(e) && !e._pausedBoss);
     if (!pool.length) pool = a.asteroids.filter(alive);
     // cel poza zasięgiem broni jest dużo mniej atrakcyjny niż ten, do którego można strzelać od razu
-    const tScore = e => { const [x, y] = rel(e); const d = Math.hypot(x, y); return d * (0.6 + 0.4 * hpFrac(e)) + Math.max(0, d - TR) * 3; };
+    const tScore = e => { const [x, y] = rel(e); const d = Math.hypot(x, y); return d * (0.6 + 0.4 * hpFrac(e)) + Math.max(0, d - TR) * 3 + (e.invulnerable || e._invulnerable ? 5000 : 0); };
     let best = null, bestS = Infinity;
     for (const e of pool) { const sc = tScore(e); if (sc < bestS) { bestS = sc; best = e; } }
     if (!(target && pool.includes(target) && tScore(target) < bestS * 1.25)) target = best;
