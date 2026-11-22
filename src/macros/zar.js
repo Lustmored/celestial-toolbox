@@ -226,9 +226,12 @@ export const coinFlipper = {
     if (ctx.p.flip) {
       if (W().hasUpgrade("za", 14)) {
         // Wbudowany Autoflip wydaje CP — przy oszczędzaniu go wyłączamy.
-        if (cf.autoFlip === saving) { cf.autoFlip = !saving; ctx.did(); }
-        if (!saving) parts.push("Autoflip gry");
-      } else if (!saving && !cf.flipping && D(P.za.chancePoints).gte(cf.flipCost)) {
+        // Od ulepszenia Zar 18 rzut nic nie kosztuje — wtedy Autoflip zawsze włączony.
+        const freeFlip = W().hasUpgrade("za", 18);
+        const want = freeFlip || !saving;
+        if (Boolean(cf.autoFlip) !== want) { cf.autoFlip = want; ctx.did(); }
+        if (want) parts.push("Autoflip gry");
+      } else if ((!saving || W().hasUpgrade("za", 18)) && !cf.flipping && D(P.za.chancePoints).gte(cf.flipCost)) {
         W().clickClickable("cf", 11);
         ctx.did();
         parts.push("rzut");
