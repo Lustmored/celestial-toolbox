@@ -530,3 +530,48 @@ export const flowerGilding = {
       : `wszystko z listy pozłocone · ${window.formatWhole(P.goldenSeeds)} GS wolnych`);
   },
 };
+
+// Farma nest resetów (pod milestone'y, nie pod nesty): ścieżka pollen → reset Honeycombów, gdy dadzą ≥ próg,
+// ścieżka nectar → reset Royal Jelly ≥ próg, potem nest reset. Ścieżkę wybiera tak jak skróty klawiszowe gry ([ i ]).
+export const nestFarm = {
+  id: "nest-farm",
+  name: "Farma nest resetów (milestone'y)",
+  group: "Hive",
+  every: 0.2,
+  description:
+    "Cykl: ścieżka Pollen → reset Honeycombów, gdy po resecie będzie ich ≥ próg → ścieżka Nectar → reset Royal Jelly ≥ próg → " +
+    "nest reset (wymaga 1e25 obu). Liczy się liczba nest resetów, nie nesty. Ścieżkę ustawia jak skróty gry [ i ]. " +
+    "Makra Pollen/Nectar mogą działać równolegle — to one rozpędzają bee bread i honey.",
+  params: [
+    { key: "target", label: "Próg Honeycombs / Royal Jelly (gra wymaga 1e25)", type: "text", default: "1e25" },
+  ],
+  available: () => Boolean(window.player?.n && window.layers.n && window.layers.al && window.tmp.n?.layerShown !== false),
+  run(ctx) {
+    const D = window.Decimal, P = window.player, al = P.al;
+    if ((ctx.state.waitUntil ?? 0) > Date.now()) return ctx.status("czekam na koniec resetu");
+    let target; try { target = new D(ctx.p.target || "1e25").max(1e25); } catch { target = new D(1e25); }
+    const hcOk = new D(al.honeycomb).gte(target), rjOk = new D(al.royalJelly).gte(target);
+    const st = `nest resetów ${window.formatWhole(P.n.nestReset)}`;
+
+    if (hcOk && rjOk) {
+      window.clickClickable("n", 1);
+      ctx.state.waitUntil = Date.now() + 1000; // gra robi 5 resetów co 100 ms
+      ctx.log(`Nest reset #${window.formatWhole(P.n.nestReset)}`); ctx.did();
+      return ctx.status("nest reset · " + st);
+    }
+    const want = hcOk ? 2 : 1; // najpierw Honeycombs (Pollen), potem Royal Jelly (Nectar)
+    if (P.bee.path === 0) { P.bee.path = want; ctx.did(); return ctx.status(`wybrano ścieżkę ${want === 1 ? "Pollen" : "Nectar"} · ${st}`); }
+    if (P.bee.path !== want) return ctx.status(`na ścieżce ${P.bee.path === 1 ? "Pollen" : "Nectar"}, a trzeba ${want === 1 ? "Pollen" : "Nectar"} — czekam na reset · ${st}`);
+
+    const [cur, gain, id, name] = want === 1
+      ? [al.honeycomb, al.honeycombGain, 1, "Honeycombs"] : [al.royalJelly, al.royalJellyGain, 2, "Royal Jelly"];
+    const after = new D(cur).add(gain);
+    if (after.gte(target) && window.tmp.al.clickables?.[id]?.canClick) {
+      window.clickClickable("al", id);
+      ctx.state.waitUntil = Date.now() + 500;
+      ctx.log(`Reset ${name}: ${window.format(after)}`); ctx.did();
+      return ctx.status(`reset ${name} · ${st}`);
+    }
+    ctx.status(`${name}: ${window.format(after)} / ${window.format(target)} po resecie · ${st}`);
+  },
+};
