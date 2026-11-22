@@ -161,6 +161,8 @@ export const coinFlipper = {
     { key: "cardK", label: "Tryb K: K (1 = podwojenie generatorów)", type: "number", default: 1, min: 0.1, step: 0.1 },
     { key: "cardMin", label: "Minimalny zysk generatorów", type: "number", default: 1, min: 1, step: 1 },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
+    { key: "passiveNoSpin", label: "Nie kręć kołem, gdy masz pasywne wheel points (ulepszenie kart 12)", type: "bool", default: true },
+    { key: "passiveNoSlot", label: "Nie kręć slotami, gdy masz pasywne żetony (ulepszenie kart 16)", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
     { key: "reduceWheel", label: "Klikaj „Reduce wheels spun” po cooldownie (tańsze obroty, nieco mniej wheel points)", type: "bool", default: true },
     { key: "spinDump", label: "Przed obrotem: wszystkie heads → wheel point gain (24), tails → wymaganie obrotu (34)", type: "bool", default: true },
@@ -255,7 +257,10 @@ export const coinFlipper = {
     // Sloty: najdroższy reset (zeruje CP, Coin Flip i całe koło). Gdy obrót slotów w zasięgu — oszczędzamy na niego.
     let slotHold = false;
     const sm = P.sm;
-    const smOn = Boolean(ctx.p.slots && sm && W().layers.sm && W().tmp.sm?.layerShown !== false);
+    // Z pasywnymi żetonami (ulepszenie kart 16) obrót slotów tylko kasuje Coin Flip i koło — wtedy nie kręcimy.
+    const slotPassive = ctx.p.passiveNoSlot && W().hasUpgrade("car", 16);
+    const smOn = Boolean(ctx.p.slots && !slotPassive && sm && W().layers.sm && W().tmp.sm?.layerShown !== false);
+    if (slotPassive) parts.push("sloty: pasywne żetony, bez obrotów");
     if (smOn && sm.spinActive) parts.push("sloty się kręcą");
     if (smOn && !upgHold && !sm.spinActive) {
       const cost = D(sm.spinCost), cp = D(P.za.chancePoints);
@@ -277,8 +282,8 @@ export const coinFlipper = {
       }
       ctx.state.slotSaving = slotHold;
     }
-    if (smOn) {
-      if (ctx.p.reduceSlots && D(sm.reductionCooldown).lte(0) && D(sm.spinAmount).gte(2) && !sm.spinActive) {
+    if (sm && W().layers.sm) {
+      if (smOn && ctx.p.reduceSlots && D(sm.reductionCooldown).lte(0) && D(sm.spinAmount).gte(2) && !sm.spinActive) {
         W().clickClickable("sm", 12); ctx.log("Reduce slots spun"); ctx.did();
       }
       if (ctx.p.buyChips && !W().hasUpgrade("car", 17)) { // od ulepszenia kart 17 gra kupuje je sama (za darmo)
@@ -291,7 +296,13 @@ export const coinFlipper = {
     if (wof && (upgHold || slotHold) && wof.autoSpin) { wof.autoSpin = false; ctx.state.autoSpinWas = true; }
     else if (wof && !upgHold && !slotHold && ctx.state.autoSpinWas) { wof.autoSpin = true; ctx.state.autoSpinWas = false; }
 
-    if (wheelOn && ctx.p.spin && !upgHold && !slotHold) {
+    // Z pasywnymi wheel points (ulepszenie kart 12) obrót koła głównie kasuje Coin Flip i CP — wtedy nie kręcimy.
+    const wheelPassive = ctx.p.passiveNoSpin && W().hasUpgrade("car", 12);
+    if (wheelPassive) {
+      parts.push("koło: pasywne wheel points, bez obrotów");
+      if (wof?.autoSpin) { wof.autoSpin = false; ctx.log("Wyłączono wbudowany autospin koła (pasywne wheel points)"); }
+    }
+    if (wheelOn && ctx.p.spin && !upgHold && !slotHold && !wheelPassive) {
       if (dumpOn && ctx.state.saving && spinDump()) { ctx.did(); W().updateTemp?.(); }
       const cp = D(P.za.chancePoints), cost = D(wof.spinCost);
       if (cp.gte(cost)) {
@@ -340,7 +351,7 @@ export const coinFlipper = {
       ctx.did();
     }
 
-    if (wheelOn && ctx.p.reduceWheel && D(wof.reductionCooldown).lte(0) && D(wof.wheelsSpinned).gte(7)) {
+    if (wheelOn && ctx.p.reduceWheel && !(ctx.p.passiveNoSpin && W().hasUpgrade("car", 12)) && D(wof.reductionCooldown).lte(0) && D(wof.wheelsSpinned).gte(7)) {
       const before = D(wof.wheelsSpinned);
       W().clickClickable("wof", 12);
       ctx.log(`Reduce wheels: ${W().formatWhole(before)} → ${W().formatWhole(wof.wheelsSpinned)} obrotów`);
