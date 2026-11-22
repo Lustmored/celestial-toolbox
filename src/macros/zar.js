@@ -233,12 +233,15 @@ export const coinFlipper = {
         factorDump(ctx, "card", get.gt(0) ? D(P.za.chancePoints) : D(0)); // CP zostawiamy — od nich zależą generatory
         if (ctx.p.drawBeforeReset) { // karty na dobranie są teraz najliczniejsze (buyable x4 na maksimum runu)
           let d = 0;
+          const ad = car.autoDraw, was = ad?.toggle;
+          if (ad) ad.toggle = true; // gra nie pokazuje wtedy wyskakujących kart
           for (let i = 0; i < 200 && D(car.cardShreds).gte(car.cardShredReq); i++) {
             const before = D(car.cardDrawAmount);
             W().clickClickable("car", 12);
             if (D(car.cardDrawAmount).eq(before)) break;
             d++; W().layers.car.update?.(0);
           }
+          if (ad) ad.toggle = was;
           if (d) ctx.log(`Dobrano karty ${d}× tuż przed card resetem`);
         }
         W().clickClickable("car", 11);

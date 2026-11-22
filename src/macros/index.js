@@ -14,7 +14,7 @@ import { starExplore } from "./exploration.js";
 import { pollenLoop, nectarLoop, flowerPicker, hiveResearch, twigCollector, flowerGilding, nestFarm } from "./hive.js";
 import { numbnessLoop } from "./numbness.js";
 import { coinFlipper, cardsHelper } from "./zar.js";
-import { stableSoftcaps, claimAchievements } from "./tweaks.js";
+import { stableSoftcaps, claimAchievements, hideCardParticles } from "./tweaks.js";
 
 export default [
   cbClaimAll, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -26,6 +26,6 @@ export default [
   shipHunter, starExplore,
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding, nestFarm,
   numbnessLoop,
-  coinFlipper, cardsHelper, stableSoftcaps, claimAchievements,
+  coinFlipper, cardsHelper, stableSoftcaps, claimAchievements, hideCardParticles,
   bhSkillButtons, labAutoEnter,
 ];

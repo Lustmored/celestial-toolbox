@@ -153,3 +153,27 @@ export const claimAchievements = {
     }
   },
 };
+
+// Wyskakujące obrazki kart przy dobieraniu (cząsteczki nad dowolną zakładką) — przy wielu dobraniach naraz zasłaniają grę.
+let cardParticlesOrig = null;
+export const hideCardParticles = {
+  id: "tweak-hide-card-particles",
+  name: "Ukryj wyskakujące karty przy dobieraniu",
+  group: "Wygląd",
+  toggle: true,
+  description: "Dobieranie kart (ręczne i makrem) nie pokazuje wylatujących obrazków kart. Tylko wygląd.",
+  available: () => typeof window.makeParticles === "function",
+  onEnable() {
+    if (cardParticlesOrig) return;
+    cardParticlesOrig = window.makeParticles;
+    window.makeParticles = function (...a) {
+      const text = a[3]?.text;
+      if (typeof text === "string" && text.includes("resources/cards/")) return;
+      return cardParticlesOrig.apply(this, a);
+    };
+  },
+  onDisable() {
+    if (cardParticlesOrig) window.makeParticles = cardParticlesOrig;
+    cardParticlesOrig = null;
+  },
+};
