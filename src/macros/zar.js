@@ -154,10 +154,12 @@ export const coinFlipper = {
     { key: "blessings", label: "Blessings (Check Back Shrine) traktuj jak ulepszenia Zar: oszczędzaj i kupuj", type: "bool", default: true },
     { key: "factors", label: "Przed obrotem koła/slotów i card resetem: waluty, które przepadną (CP ponad koszt, heads, tails, wheel points, żetony) na Check Back Factors", type: "bool", default: true },
     { key: "cardReset", label: "Card generators: reset Dice Space, gdy zysk ≥ K × posiadane", type: "bool", default: true },
+    { key: "drawBeforeReset", label: "Dobieraj karty tuż przed card resetem (najwięcej kart na dobranie)", type: "bool", default: true },
     { key: "cardMode", label: "Moment card resetu", type: "select", default: "rate",
-      options: [["rate", "szczyt tempa (generatory/czas)"], ["ratio", "zysk ≥ K × posiadane"]] },
-    { key: "cardTol", label: "Szczyt tempa: reset, gdy tempo spadnie o ≥ tyle % od szczytu…", type: "number", default: 3, min: 0, step: 1 },
-    { key: "cardPatience", label: "…i nie wraca przez tyle sekund", type: "number", default: 20, min: 0, step: 5 },
+      options: [["rate", "przyrost spada poniżej średniego tempa"], ["ratio", "zysk ≥ K × posiadane"]] },
+    { key: "cardTol", label: "Reset, gdy bieżący przyrost < średnie tempo runu o ≥ tyle %…", type: "number", default: 3, min: 0, step: 1 },
+    { key: "cardPatience", label: "…i nie wraca przez tyle sekund (maksymalnie)…", type: "number", default: 20, min: 0, step: 5 },
+    { key: "cardPatFrac", label: "…ale najwyżej przez taką część długości runu", type: "number", default: 0.1, min: 0, step: 0.05 },
     { key: "cardK", label: "Tryb K: K (1 = podwojenie generatorów)", type: "number", default: 1, min: 0.1, step: 0.1 },
     { key: "cardMin", label: "Minimalny zysk generatorów", type: "number", default: 1, min: 1, step: 1 },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
@@ -192,27 +194,48 @@ export const coinFlipper = {
       const now = Date.now();
       ctx.state.cardStart ??= now;
       let doReset = false, why = "";
-      if (get.gte(Math.max(1, ctx.p.cardMin))) {
-        // Pierwszy run po włączeniu makra ma nieznany początek — wtedy reguła K, potem już szczyt tempa.
-        if (ctx.p.cardMode === "ratio" || !ctx.state.cardKnown) { doReset = get.gte(have.mul(ctx.p.cardK)); if (!ctx.state.cardKnown) why = " · pierwszy run: reguła K"; }
-        else {
-          // Szczyt tempa: generatory / czas od ostatniego resetu. Resetujemy, gdy tempo spadło poniżej szczytu i nie wraca.
-          const rate = get.toNumber() / Math.max(1, (now - ctx.state.cardStart) / 1000);
-          if (rate >= (ctx.state.cardBest ?? 0)) { ctx.state.cardBest = rate; ctx.state.cardBelow = null; }
-          else if (rate < ctx.state.cardBest * (1 - ctx.p.cardTol / 100)) {
-            ctx.state.cardBelow ??= now;
-            if (now - ctx.state.cardBelow >= ctx.p.cardPatience * 1000) doReset = true;
-          } else ctx.state.cardBelow = null;
-          why = ` · tempo ${(rate * 60).toFixed(2)}/min (szczyt ${((ctx.state.cardBest ?? 0) * 60).toFixed(2)})`;
-        }
-      }
+      const elapsed = now - ctx.state.cardStart;
+      // Obroty slotów zerują CP, więc zysk z card resetu skacze w dół — liczymy tempo z najlepszego zysku w tym runie.
+      if (get.gt(ctx.state.cardMaxGet ?? 0)) ctx.state.cardMaxGet = get.toNumber();
+      const maxGet = ctx.state.cardMaxGet ?? 0;
+      if (ctx.p.cardMode === "ratio") doReset = get.gte(Math.max(1, ctx.p.cardMin)) && get.gte(have.mul(ctx.p.cardK));
+      else if (maxGet >= Math.max(1, ctx.p.cardMin) && elapsed >= 30000) {
+        // Twierdzenie o wartości krańcowej: resetujemy, gdy bieżący przyrost zysku (z ostatnich ~20% runu)
+        // spadnie poniżej średniego tempa całego runu — dalsze czekanie obniżałoby średnią.
+        const hist = (ctx.state.cardHist ??= []);
+        hist.push([now, maxGet]);
+        const w = Math.max(10000, 0.2 * elapsed);
+        while (hist.length > 2 && hist[1][0] <= now - w) hist.shift();
+        const [t0, g0] = hist[0];
+        const marginal = (maxGet - g0) / Math.max(1, (now - t0) / 1000);
+        const avg = maxGet / (elapsed / 1000);
+        if (now - t0 >= w * 0.9 && marginal < avg * (1 - ctx.p.cardTol / 100)) {
+          ctx.state.cardBelow ??= now;
+          const pat = Math.min(ctx.p.cardPatience * 1000, (ctx.p.cardPatFrac ?? 0.1) * elapsed);
+          if (now - ctx.state.cardBelow >= pat) {
+            if (get.gte(maxGet * 0.98)) doReset = true;
+            else { cardHold = true; why += ` · czekam, aż zysk wróci do ${maxGet}`; }
+          }
+        } else ctx.state.cardBelow = null;
+        why = ` · przyrost ${(marginal * 60).toFixed(1)}/min vs średnio ${(avg * 60).toFixed(1)}/min` + why;
+      } else if (ctx.p.cardMode !== "ratio") why = " · mierzę tempo";
       if (doReset && (P.sm?.spinActive || wof?.spinActive)) {
         // Obrót w toku — czekamy na jego koniec, ale nie pozwalamy kolejnym obrotom zjeść CP.
         cardHold = true; parts.push("card reset po końcu obrotu");
       } else if (doReset) {
         factorDump(ctx, "card", get.gt(0) ? D(P.za.chancePoints) : D(0)); // CP zostawiamy — od nich zależą generatory
+        if (ctx.p.drawBeforeReset) { // karty na dobranie są teraz najliczniejsze (buyable x4 na maksimum runu)
+          let d = 0;
+          for (let i = 0; i < 200 && D(car.cardShreds).gte(car.cardShredReq); i++) {
+            const before = D(car.cardDrawAmount);
+            W().clickClickable("car", 12);
+            if (D(car.cardDrawAmount).eq(before)) break;
+            d++; W().layers.car.update?.(0);
+          }
+          if (d) ctx.log(`Dobrano karty ${d}× tuż przed card resetem`);
+        }
         W().clickClickable("car", 11);
-        ctx.state.cardStart = now; ctx.state.cardBest = 0; ctx.state.cardBelow = null; ctx.state.cardKnown = true;
+        ctx.state.cardStart = now; ctx.state.cardBest = 0; ctx.state.cardBelow = null; ctx.state.cardMaxGet = 0; ctx.state.cardHist = [];
         ctx.state.slotStart = ctx.state.runStart = now; ctx.state.saving = ctx.state.slotSaving = false;
         ctx.log(`Card reset: +${W().formatWhole(get)} generatorów (było ${W().formatWhole(have)})`);
         ctx.did(); ctx.status("card reset"); return;
