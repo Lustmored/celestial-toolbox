@@ -199,12 +199,12 @@ export const coinFlipper = {
       if (get.gt(ctx.state.cardMaxGet ?? 0)) ctx.state.cardMaxGet = get.toNumber();
       const maxGet = ctx.state.cardMaxGet ?? 0;
       if (ctx.p.cardMode === "ratio") doReset = get.gte(Math.max(1, ctx.p.cardMin)) && get.gte(have.mul(ctx.p.cardK));
-      else if (maxGet >= Math.max(1, ctx.p.cardMin) && elapsed >= 30000) {
+      else if (maxGet >= Math.max(1, ctx.p.cardMin) && elapsed >= 10000) {
         // Twierdzenie o wartości krańcowej: resetujemy, gdy bieżący przyrost zysku (z ostatnich ~20% runu)
         // spadnie poniżej średniego tempa całego runu — dalsze czekanie obniżałoby średnią.
         const hist = (ctx.state.cardHist ??= []);
         hist.push([now, maxGet]);
-        const w = Math.max(10000, 0.2 * elapsed);
+        const w = Math.max(4000, 0.2 * elapsed);
         while (hist.length > 2 && hist[1][0] <= now - w) hist.shift();
         const [t0, g0] = hist[0];
         const marginal = (maxGet - g0) / Math.max(1, (now - t0) / 1000);
