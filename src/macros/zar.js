@@ -138,6 +138,9 @@ export const coinFlipper = {
       default: "103:100 102:10 108:8 101:5 104:4 106:3 105:3 107:1" },
     { key: "blessings", label: "Blessings (Check Back Shrine) traktuj jak ulepszenia Zar: oszczędzaj i kupuj", type: "bool", default: true },
     { key: "factors", label: "Tuż po obrocie koła/slotów: resztę CP (i tak przepada) na Check Back Factors", type: "bool", default: true },
+    { key: "cardReset", label: "Card generators: reset Dice Space, gdy zysk ≥ K × posiadane", type: "bool", default: true },
+    { key: "cardK", label: "K (1 = podwojenie generatorów)", type: "number", default: 1, min: 0.1, step: 0.1 },
+    { key: "cardMin", label: "Minimalny zysk generatorów", type: "number", default: 1, min: 1, step: 1 },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
     { key: "reduceWheel", label: "Klikaj „Reduce wheels spun” po cooldownie (tańsze obroty, nieco mniej wheel points)", type: "bool", default: true },
@@ -158,6 +161,19 @@ export const coinFlipper = {
       if (ctx.p.buyWheel && buyGroup("wof", WHEEL, parseWeights(ctx.p.wheelWeights))) ctx.did();
       ctx.status(`koło się kręci · obrotów ${W().formatWhole(wof.wheelsSpinned)}`);
       return;
+    }
+
+    // Card generators: reset całego Dice Space, gdy zysk ≥ K × posiadane (domyślnie podwojenie).
+    const car = P.car;
+    if (ctx.p.cardReset && car && W().layers.car && W().tmp.car?.layerShown !== false && !P.sm?.spinActive && !wof?.spinActive) {
+      const get = D(car.cardGeneratorsToGet), have = D(car.cardGenerators);
+      if (get.gte(Math.max(1, ctx.p.cardMin)) && get.gte(have.mul(ctx.p.cardK))) {
+        W().clickClickable("car", 11);
+        ctx.state.slotStart = ctx.state.runStart = Date.now(); ctx.state.saving = ctx.state.slotSaving = false;
+        ctx.log(`Card reset: +${W().formatWhole(get)} generatorów (było ${W().formatWhole(have)})`);
+        ctx.did(); ctx.status("card reset"); return;
+      }
+      if (have.gt(0) || get.gt(0)) parts.push(`generatory ${W().formatWhole(have)} (+${W().formatWhole(get)}, reset przy ${W().formatWhole(W().Decimal.max(ctx.p.cardMin, have.mul(ctx.p.cardK)).ceil())})`);
     }
 
     let saving = false;
