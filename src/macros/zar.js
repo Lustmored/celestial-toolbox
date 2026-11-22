@@ -223,6 +223,13 @@ export const coinFlipper = {
         // Obrót w toku — czekamy na jego koniec, ale nie pozwalamy kolejnym obrotom zjeść CP.
         cardHold = true; parts.push("card reset po końcu obrotu");
       } else if (doReset) {
+        // Żetony przepadną: najpierw researche (115–117 nie resetują się), dopiero resztka w Factory.
+        if (ctx.p.buyChips && P.sm && W().layers.sm) {
+          const w = parseWeights(ctx.p.chipWeights);
+          if (W().hasUpgrade("car", 17)) for (let i = 101; i <= 108; i++) delete w[i];
+          for (const i of [115, 116, 117]) w[i] ??= 20;
+          for (const g of chipGroups()) buyGroup("sm", g, w, 500);
+        }
         factorDump(ctx, "card", get.gt(0) ? D(P.za.chancePoints) : D(0)); // CP zostawiamy — od nich zależą generatory
         if (ctx.p.drawBeforeReset) { // karty na dobranie są teraz najliczniejsze (buyable x4 na maksimum runu)
           let d = 0;
@@ -313,6 +320,7 @@ export const coinFlipper = {
         const w = parseWeights(ctx.p.chipWeights);
         // Ulepszenie kart 17: gra sama (za darmo) kupuje researche 101–108 — resztę (115–117 itd.) kupujemy my.
         if (W().hasUpgrade("car", 17)) for (let i = 101; i <= 108; i++) delete w[i];
+        for (const i of [115, 116, 117]) w[i] ??= 20; // nie resetują się, a są mocne — zawsze w puli
         let k = 0; for (const g of chipGroups()) k += buyGroup("sm", g, w);
         if (k) { ctx.did(); parts.push(`żetony: kupiono ${k}`); }
       }
