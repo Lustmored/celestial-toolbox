@@ -177,7 +177,7 @@ export const coinFlipper = {
 
     // Koło: obrót w toku resetuje Coin Flip co klatkę — nic nie ruszamy.
     if (wheelOn && wof.spinActive) {
-      if (ctx.p.buyWheel && buyGroup("wof", WHEEL, parseWeights(ctx.p.wheelWeights))) ctx.did();
+      if (ctx.p.buyWheel && !W().hasUpgrade("car", 17) && buyGroup("wof", WHEEL, parseWeights(ctx.p.wheelWeights))) ctx.did();
       ctx.status(`koło się kręci · obrotów ${W().formatWhole(wof.wheelsSpinned)}`);
       return;
     }
@@ -281,7 +281,7 @@ export const coinFlipper = {
       if (ctx.p.reduceSlots && D(sm.reductionCooldown).lte(0) && D(sm.spinAmount).gte(2) && !sm.spinActive) {
         W().clickClickable("sm", 12); ctx.log("Reduce slots spun"); ctx.did();
       }
-      if (ctx.p.buyChips) {
+      if (ctx.p.buyChips && !W().hasUpgrade("car", 17)) { // od ulepszenia kart 17 gra kupuje je sama (za darmo)
         const w = parseWeights(ctx.p.chipWeights);
         let k = 0; for (const g of chipGroups()) k += buyGroup("sm", g, w);
         if (k) { ctx.did(); parts.push(`żetony: kupiono ${k}`); }
@@ -355,7 +355,7 @@ export const coinFlipper = {
       if (!saving || upgHold) n += buyGroup("cf", HEADS, w) + buyGroup("cf", TAILS, w);
     }
     if (ctx.p.buyCP && !saving && !smAuto) n += buyGroup("cf", CP_BUY, parseWeights(ctx.p.cpWeights));
-    if (wheelOn && ctx.p.buyWheel) n += buyGroup("wof", WHEEL, parseWeights(ctx.p.wheelWeights));
+    if (wheelOn && ctx.p.buyWheel && !W().hasUpgrade("car", 17)) n += buyGroup("wof", WHEEL, parseWeights(ctx.p.wheelWeights));
     if (n) { ctx.did(); parts.push(`kupiono ${n}`); }
     if (smAuto) parts.push("buyable Coin Flipa kupuje gra");
 
