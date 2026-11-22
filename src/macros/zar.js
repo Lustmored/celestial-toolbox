@@ -366,7 +366,7 @@ const SUITS = [[11, 12, 13, 14], [21, 22, 23, 24], [31, 32, 33, 34], [41, 42, 43
 
 export const cardsHelper = {
   id: "cards-helper",
-  name: "Cards: dobieranie, poziomy i buyable kolorów",
+  name: "Cards: buyable kolorów (opcjonalnie dobieranie i poziomy)",
   group: "Universe Epsilon",
   every: 0.2,
   description:
@@ -374,8 +374,8 @@ export const cardsHelper = {
     "(pik/kier/karo/trefl — każdy kolor ma własną walutę). Wagi: x1 = mnożnik punktów koloru, x2 = bonus koloru " +
     "(CP / heads-tails / wheel points / żetony), x3 = shredy, x4 = +karty na dobranie (limit 10). Ulepszenia i buyable za generatory zostają Tobie.",
   params: [
-    { key: "draw", label: "Dobieraj karty, gdy starcza shredów", type: "bool", default: true },
-    { key: "level", label: "Klikaj „Level All”", type: "bool", default: true },
+    { key: "draw", label: "Dobieraj karty, gdy starcza shredów", type: "bool", default: false },
+    { key: "level", label: "Klikaj „Level All”", type: "bool", default: false },
     { key: "buy", label: "Kupuj buyable kolorów", type: "bool", default: true },
     { key: "weights", label: "Wagi w każdym kolorze (x1..x4 → 1..4)", type: "text", default: "4:10 1:5 3:4 2:3" },
   ],
