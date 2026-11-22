@@ -309,8 +309,10 @@ export const coinFlipper = {
       if (smOn && ctx.p.reduceSlots && D(sm.reductionCooldown).lte(0) && D(sm.spinAmount).gte(2) && !sm.spinActive) {
         W().clickClickable("sm", 12); ctx.log("Reduce slots spun"); ctx.did();
       }
-      if (ctx.p.buyChips && !W().hasUpgrade("car", 17)) { // od ulepszenia kart 17 gra kupuje je sama (za darmo)
+      if (ctx.p.buyChips) {
         const w = parseWeights(ctx.p.chipWeights);
+        // Ulepszenie kart 17: gra sama (za darmo) kupuje researche 101–108 — resztę (115–117 itd.) kupujemy my.
+        if (W().hasUpgrade("car", 17)) for (let i = 101; i <= 108; i++) delete w[i];
         let k = 0; for (const g of chipGroups()) k += buyGroup("sm", g, w);
         if (k) { ctx.did(); parts.push(`żetony: kupiono ${k}`); }
       }
