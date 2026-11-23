@@ -178,43 +178,78 @@ export const hideCardParticles = {
   },
 };
 
-// Błąd gry: Celestialite M-26 trzyma liczbę strzał w actions[0].variables.bullets, a pętla efektów BH traktuje każdą
-// zmienną jako statystykę (bhTemp[...].bullets.mul) → wyjątek w każdej klatce i walka staje (nawet Give up nie wychodzi).
-// Poprawka: liczba strzał trzymana poza `variables`.
-let m26Orig = null;
+// Błąd gry: część celestialitów (M-26, ⇑Ι – strzały; M-A2, ⇑Δ – trucizna) trzyma licznik w actions[0].variables.bullets,
+// a pętla efektów BH traktuje każdą zmienną jako statystykę (bhTemp[...].bullets.mul) → wyjątek w każdej klatce, walka staje.
+// Dodatkowo gra przypisuje `variables` przez referencję do definicji BHC, więc zabłąkane `bullets` przechodzi na kolejne
+// celestiality (np. F-00 w laboratorium) i przetrwa zapis. Poprawka: licznik trzymany poza `variables` i zerowany przy spawnie.
+let bulletsOrig = null;
+let bulletsTimer = null;
+const ARROW_IDS = ["m26", "majorEnas"];
+const POISON_IDS = ["ma2", "majorDeka"];
 const getBHC = () => { try { return window.BHC ?? (0, eval)("typeof BHC !== 'undefined' ? BHC : undefined"); } catch { return undefined; } };
-function m26Clean() {
+function bulletsClean() {
   const c = window.player?.bh?.celestialite;
   for (const a of Object.values(c?.actions ?? {})) if (a?.variables && "bullets" in a.variables) {
-    if (c.id === "m26") c.__ctbBullets = a.variables.bullets;
+    if ([...ARROW_IDS, ...POISON_IDS].includes(c.id) && c.__ctbBullets == null) c.__ctbBullets = Number(a.variables.bullets) || undefined;
     delete a.variables.bullets;
+  }
+  for (const def of Object.values(getBHC() ?? {})) {
+    if (!def || typeof def !== "object" || !def.actions) continue;
+    for (const a of Object.values(def.actions)) if (a?.variables && typeof a.variables === "object" && "bullets" in a.variables) delete a.variables.bullets;
   }
 }
 export const fixM26 = {
   id: "fix-m26",
-  name: "Poprawka błędu: Celestialite M-26 zawiesza walkę",
+  name: "Poprawka błędu: liczniki celestialitów zawieszają walkę",
   group: "Inne",
   toggle: true,
   description:
-    "Naprawia błąd gry, przez który walka z Celestialite M-26 (Arrow Flurry/Resupply) wywala się w każdej klatce " +
-    "(„bhTemp[…] is undefined”) i nie da się z niej wyjść. Licznik strzał jest trzymany poza zmiennymi efektów.",
+    "Naprawia błąd gry, przez który walka z M-26 / ⇑Ι (Arrow Resupply) albo M-A2 / ⇑Δ (Increased Toxicity) wywala się " +
+    "w każdej klatce („bhTemp[…] is undefined”), a zabłąkany licznik potrafi przejść na kolejne walki (np. F-00). " +
+    "Licznik jest trzymany poza zmiennymi efektów i zerowany przy pojawieniu się nowego celestialita – mechanika bez zmian.",
   available: () => Boolean(getBHC()?.m26?.actions),
   onEnable() {
-    const A = getBHC().m26.actions;
-    if (m26Orig) return;
-    m26Orig = { hit: A[0].properties["multi-hit"], trig: A[1].onTrigger };
+    const B = getBHC();
+    if (bulletsOrig) return;
+    bulletsOrig = { defs: {}, spawn: null };
     const cel = () => window.player.bh.celestialite;
-    A[0].properties["multi-hit"] = function () { const c = cel(); c.__ctbBullets ??= 3; return [c.__ctbBullets, 200]; };
-    A[1].onTrigger = function () {
-      const c = cel(); c.__ctbBullets = (c.__ctbBullets ?? 3) + 1;
-      window.bhLog?.("<span style='color: #8b0e7a'>" + window.run(getBHC()[c.id].name, getBHC()[c.id]) + " increases its arrow count.");
-    };
-    m26Clean();
+    const log = (txt) => { const c = cel(); window.bhLog?.("<span style='color: #8b0e7a'>" + window.run(B[c.id].name, B[c.id]) + txt); };
+    for (const id of ARROW_IDS) {
+      const A = B[id]?.actions; if (!A?.[0]?.properties?.["multi-hit"] || !A[1]?.onTrigger) continue;
+      bulletsOrig.defs[id] = { a: A[0].properties["multi-hit"], t: A[1].onTrigger };
+      A[0].properties["multi-hit"] = function () { const c = cel(); c.__ctbBullets ??= 3; return [c.__ctbBullets, 200]; };
+      A[1].onTrigger = function () { const c = cel(); c.__ctbBullets = (c.__ctbBullets ?? 3) + 1; log(" increases its arrow count."); };
+    }
+    for (const id of POISON_IDS) {
+      const A = B[id]?.actions; if (!A?.[0]?.effects?.regenAdd || !A[1]?.onTrigger) continue;
+      bulletsOrig.defs[id] = { a: A[0].effects.regenAdd, t: A[1].onTrigger };
+      const base = () => { const c = cel(); c.__ctbBullets ??= c.luck.toNumber(); return c.__ctbBullets; };
+      A[0].effects.regenAdd = function () { return window.Decimal.mul(-1, base()); };
+      A[1].onTrigger = function () { const c = cel(); c.__ctbBullets = base() * 1.3; log(" increases its poison slash's toxicity."); };
+    }
+    if (typeof window.celestialiteSpawn === "function") {
+      bulletsOrig.spawn = window.celestialiteSpawn;
+      const orig = bulletsOrig.spawn;
+      window.celestialiteSpawn = function (...args) {
+        const c = window.player?.bh?.celestialite; if (c) delete c.__ctbBullets;
+        const r = orig.apply(this, args);
+        bulletsClean();
+        return r;
+      };
+    }
+    bulletsClean();
+    bulletsTimer = setInterval(bulletsClean, 1000);
   },
   onDisable() {
-    if (!m26Orig) return;
-    const A = getBHC().m26.actions;
-    A[0].properties["multi-hit"] = m26Orig.hit; A[1].onTrigger = m26Orig.trig;
-    m26Orig = null;
+    if (!bulletsOrig) return;
+    const B = getBHC();
+    for (const [id, o] of Object.entries(bulletsOrig.defs)) {
+      const A = B[id].actions;
+      if (A[0].properties?.["multi-hit"]) A[0].properties["multi-hit"] = o.a; else A[0].effects.regenAdd = o.a;
+      A[1].onTrigger = o.t;
+    }
+    if (bulletsOrig.spawn) window.celestialiteSpawn = bulletsOrig.spawn;
+    clearInterval(bulletsTimer); bulletsTimer = null;
+    bulletsOrig = null;
   },
 };
