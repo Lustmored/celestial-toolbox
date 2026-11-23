@@ -155,7 +155,23 @@ export const claimAchievements = {
 };
 
 // Wyskakujące obrazki kart przy dobieraniu (cząsteczki nad dowolną zakładką) — przy wielu dobraniach naraz zasłaniają grę.
-let cardParticlesOrig = null;
+// Wspólny filtr wyskakujących efektów (makeParticles / makeShinies) — kilka przełączników, jedno opakowanie.
+const fxFilters = new Map();
+const fxOrig = {};
+function fxSync() {
+  for (const fn of ["makeParticles", "makeShinies"]) {
+    if (fxFilters.size && !fxOrig[fn] && typeof window[fn] === "function") {
+      const orig = fxOrig[fn] = window[fn];
+      window[fn] = function (...a) {
+        const text = a[3]?.text ?? a[2]?.text;
+        if (typeof text === "string") for (const f of fxFilters.values()) if (f(fn, text)) return;
+        return orig.apply(this, a);
+      };
+    } else if (!fxFilters.size && fxOrig[fn]) {
+      window[fn] = fxOrig[fn]; delete fxOrig[fn];
+    }
+  }
+}
 export const hideCardParticles = {
   id: "tweak-hide-card-particles",
   name: "Ukryj wyskakujące karty przy dobieraniu",
@@ -163,19 +179,21 @@ export const hideCardParticles = {
   toggle: true,
   description: "Dobieranie kart (ręczne i makrem) nie pokazuje wylatujących obrazków kart. Tylko wygląd.",
   available: () => typeof window.makeParticles === "function",
+  onEnable() { fxFilters.set("cards", (fn, t) => fn === "makeParticles" && t.includes("resources/cards/")); fxSync(); },
+  onDisable() { fxFilters.delete("cards"); fxSync(); },
+};
+export const hideSlotParticles = {
+  id: "tweak-hide-slot-particles",
+  name: "Ukryj wyskakujące teksty nagród ze slotów",
+  group: "Wygląd",
+  toggle: true,
+  description: "Obrót slotów nie pokazuje latających napisów „+X chips / shards” ani „Lucky!/Jackpot!”. Nagrody bez zmian.",
+  available: () => typeof window.makeParticles === "function",
   onEnable() {
-    if (cardParticlesOrig) return;
-    cardParticlesOrig = window.makeParticles;
-    window.makeParticles = function (...a) {
-      const text = a[3]?.text;
-      if (typeof text === "string" && text.includes("resources/cards/")) return;
-      return cardParticlesOrig.apply(this, a);
-    };
+    fxFilters.set("slots", (fn, t) => /^\+\S+ (red chips|blue chips|yellow chips|evolution shards|paragon shards)\.$/.test(t) || /^(Lucky|Jackpot)!/.test(t));
+    fxSync();
   },
-  onDisable() {
-    if (cardParticlesOrig) window.makeParticles = cardParticlesOrig;
-    cardParticlesOrig = null;
-  },
+  onDisable() { fxFilters.delete("slots"); fxSync(); },
 };
 
 // Błąd gry: część celestialitów (M-26, ⇑Ι – strzały; M-A2, ⇑Δ – trucizna) trzyma licznik w actions[0].variables.bullets,
