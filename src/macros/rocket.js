@@ -50,14 +50,16 @@ function spaceGain(id, xp) {
 const RARITIES = [
   { key: "Common", base: 101, count: 10, rare: false },
   { key: "Uncommon", base: 201, count: 9, rare: false },
+  { key: "Rare", base: 301, count: 9, rare: true },
 ];
 
-function candidates(ctx, excluded) {
+function candidates(ctx, excluded, rareAllowed) {
   const out = [];
   for (const [ri, r] of RARITIES.entries()) {
     for (let i = 0; i < r.count; i++) {
       const id = r.base + i;
       if (excluded.has(id)) continue;
+      if (r.rare && !rareAllowed.has(id)) continue;
       const d = window.player.pet.levelables[id];
       if (!d) continue;
       const lvl = Number(d[0]), tier = Number(d[2]);
@@ -84,7 +86,8 @@ export const rocketPassengers = {
   description:
     "Ustawia pasażerów rakiety (startu nie robi). Pomija pety, których kosmiczny odpowiednik ma już limit poziomu, i wybiera te, " +
     "które dają najwięcej kosmicznych poziomów w tym locie (przy remisie: mniejsza strata poziomu w Check Back). Uncommony (kosztują Paragon Shardy: 3/8/15/24 PS za 1/2/3/4) " +
-    "wybiera wg listy priorytetów, o ile zostaje rezerwa PS (opcjonalnie tylko te, które dobijają do limitu). Gdy makro jest włączone, nadpisuje ręczny wybór.",
+    "wybiera wg listy priorytetów, o ile zostaje rezerwa PS (opcjonalnie tylko te, które dobijają do limitu). Rare wysyła tylko z podanej listy " +
+    "(Temporal Shardy: 2/6/12 za 1/2/3; zerują peta w Check Back, XP pierwiastkowane). Gdy makro jest włączone, nadpisuje ręczny wybór.",
   params: [
     { key: "maxUncommon", label: "Maks. uncommonów na lot (PS)", type: "number", default: 2, min: 0, max: 4, step: 1 },
     { key: "uncommonCapOnly", label: "Uncommony tylko gdy dobijają do limitu (stary tryb)", type: "bool", default: false },
@@ -93,6 +96,9 @@ export const rocketPassengers = {
     { key: "minGain", label: "Min. kosmicznych poziomów z jednego peta", type: "number", default: 1, min: 1, step: 1 },
     { key: "maxLevel", label: "Nie wysyłaj petów powyżej poziomu (0 = bez limitu)", type: "number", default: 0, min: 0, step: 1 },
     { key: "exclude", label: "Nigdy nie wysyłaj (ID petów)", type: "text", default: "110" },
+    { key: "rare", label: "Rare pety do wysyłania (ID 301–309, puste = żadne)", type: "text", default: "" },
+    { key: "rareMin", label: "Rare: min. kosmicznych poziomów z jednego peta", type: "number", default: 1, min: 1, step: 1 },
+    { key: "tsReserve", label: "Rare: zostaw co najmniej Temporal Shardów", type: "number", default: 0, min: 0, step: 1 },
   ],
   available: g => g.layerActive("ro") && Boolean(window.player.spet?.levelables),
   run(ctx) {
@@ -100,13 +106,21 @@ export const rocketPassengers = {
     if (ro.starPause.gt(0)) return; // tuż po starcie gra resetuje stan — nie przeszkadzamy
 
     const excluded = new Set(ctx.parseIds(ctx.p.exclude));
-    const all = candidates(ctx, excluded);
+    const all = candidates(ctx, excluded, new Set(ctx.parseIds(ctx.p.rare)));
     const max = Number(ro.maxSelectedPassengers);
     const es = Number(window.player.cb.evolutionShards);
     const ps = Number(window.player.cb.paragonShards);
 
     const pick = [];
     let nU = 0;
+    // Rare (tylko z listy): kosztują Temporal Shardy n·(n+1), zerują peta w Check Back, a XP jest pierwiastkowane.
+    const ts = Number(window.player.stagnantSynestia?.temporalShard ?? 0);
+    let nR = 0;
+    for (const c of all.filter(c => c.ri === 2 && c.gained >= ctx.p.rareMin)) {
+      if (pick.length >= max) break;
+      if ((nR + 1) * (nR + 2) > ts - ctx.p.tsReserve) break;
+      pick.push(c); nR++;
+    }
     // Uncommony: wg listy priorytetów (pety bez limitu na końcu listy), przy remisie więcej kosmicznych poziomów.
     // W starym trybie tylko te, które dobijają kosmicznego peta do limitu.
     const prio = ctx.parseIds(ctx.p.uncommonPrio);
@@ -125,16 +139,16 @@ export const rocketPassengers = {
       pick.push(c);
     }
 
-    const want = [0, 1].map(ri => pick.filter(p => p.ri === ri).map(p => p.idx).sort((a, b) => a - b));
-    const have = [ro.selectedPassengersCommon, ro.selectedPassengersUncommon].map(a => a.map(Number).sort((a, b) => a - b));
-    const same = want.every((w, i) => w.length === have[i].length && w.every((v, j) => v === have[i][j])) && ro.selectedPassengersRare.length === 0;
+    const want = [0, 1, 2].map(ri => pick.filter(p => p.ri === ri).map(p => p.idx).sort((a, b) => a - b));
+    const have = [ro.selectedPassengersCommon, ro.selectedPassengersUncommon, ro.selectedPassengersRare].map(a => a.map(Number).sort((a, b) => a - b));
+    const same = want.every((w, i) => w.length === have[i].length && w.every((v, j) => v === have[i][j]));
 
     const label = pick.map(p => `${p.id} (lvl ${p.lvl} → +${p.gained} kosm.${p.caps ? ", limit" : ""})`).join(", ") || "brak opłacalnych pasażerów";
     if (same) return ctx.status(label);
 
     ro.selectedPassengersCommon = want[0].map(D);
     ro.selectedPassengersUncommon = want[1].map(D);
-    ro.selectedPassengersRare = [];
+    ro.selectedPassengersRare = want[2].map(D);
     ro.selectedPassengers = D(pick.length);
     ctx.did();
     ctx.status(label);
