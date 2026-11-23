@@ -15,6 +15,7 @@ import { pollenLoop, nectarLoop, flowerPicker, hiveResearch, twigCollector, flow
 import { numbnessLoop } from "./numbness.js";
 import { coinFlipper, cardsHelper } from "./zar.js";
 import { rocketFuelXp } from "./rocketfuel.js";
+import { instantResources } from "./instant.js";
 import { stableSoftcaps, claimAchievements, hideCardParticles, fixM26 } from "./tweaks.js";
 
 export default [
@@ -24,7 +25,7 @@ export default [
   casinoKiller, smaAutoEnter, hiveUnpause, spaceLoop, coreFragmentFarm,
   spaceDust,
   rocketPassengers,
-  shipHunter, starExplore,
+  shipHunter, starExplore, instantResources,
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding, nestFarm, rocketFuelXp,
   numbnessLoop,
   coinFlipper, cardsHelper, stableSoftcaps, claimAchievements, hideCardParticles, fixM26,
