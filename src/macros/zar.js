@@ -164,7 +164,7 @@ export const coinFlipper = {
     { key: "cardMin", label: "Minimalny zysk generatorów", type: "number", default: 1, min: 1, step: 1 },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
     { key: "passiveNoSpin", label: "Nie kręć kołem, gdy masz pasywne wheel points (ulepszenie kart 12)", type: "bool", default: true },
-    { key: "earlySpins", label: "Sloty: wymuś tyle obrotów na początku biegu kart (Paragon/Evo Shardy, tanie: 1e7–7e7 CP)", type: "number", default: 3, min: 0, max: 5, step: 1 },
+    { key: "earlySpins", label: "Sloty: wymuś obroty, dopóki licznik obrotów < tej liczby (Paragon/Evo Shardy; duża liczba = kręć zawsze, gdy stać)", type: "number", default: 3, min: 0, step: 1 },
     { key: "passiveNoSlot", label: "Nie kręć slotami, gdy masz pasywne żetony (ulepszenie kart 16)", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
     { key: "reduceWheel", label: "Klikaj „Reduce wheels spun” po cooldownie (tańsze obroty, nieco mniej wheel points)", type: "bool", default: true },
