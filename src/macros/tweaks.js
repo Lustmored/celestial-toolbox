@@ -177,3 +177,44 @@ export const hideCardParticles = {
     cardParticlesOrig = null;
   },
 };
+
+// Błąd gry: Celestialite M-26 trzyma liczbę strzał w actions[0].variables.bullets, a pętla efektów BH traktuje każdą
+// zmienną jako statystykę (bhTemp[...].bullets.mul) → wyjątek w każdej klatce i walka staje (nawet Give up nie wychodzi).
+// Poprawka: liczba strzał trzymana poza `variables`.
+let m26Orig = null;
+const getBHC = () => { try { return window.BHC ?? (0, eval)("typeof BHC !== 'undefined' ? BHC : undefined"); } catch { return undefined; } };
+function m26Clean() {
+  const c = window.player?.bh?.celestialite;
+  for (const a of Object.values(c?.actions ?? {})) if (a?.variables && "bullets" in a.variables) {
+    if (c.id === "m26") c.__ctbBullets = a.variables.bullets;
+    delete a.variables.bullets;
+  }
+}
+export const fixM26 = {
+  id: "fix-m26",
+  name: "Poprawka błędu: Celestialite M-26 zawiesza walkę",
+  group: "Inne",
+  toggle: true,
+  description:
+    "Naprawia błąd gry, przez który walka z Celestialite M-26 (Arrow Flurry/Resupply) wywala się w każdej klatce " +
+    "(„bhTemp[…] is undefined”) i nie da się z niej wyjść. Licznik strzał jest trzymany poza zmiennymi efektów.",
+  available: () => Boolean(getBHC()?.m26?.actions),
+  onEnable() {
+    const A = getBHC().m26.actions;
+    if (m26Orig) return;
+    m26Orig = { hit: A[0].properties["multi-hit"], trig: A[1].onTrigger };
+    const cel = () => window.player.bh.celestialite;
+    A[0].properties["multi-hit"] = function () { const c = cel(); c.__ctbBullets ??= 3; return [c.__ctbBullets, 200]; };
+    A[1].onTrigger = function () {
+      const c = cel(); c.__ctbBullets = (c.__ctbBullets ?? 3) + 1;
+      window.bhLog?.("<span style='color: #8b0e7a'>" + window.run(getBHC()[c.id].name, getBHC()[c.id]) + " increases its arrow count.");
+    };
+    m26Clean();
+  },
+  onDisable() {
+    if (!m26Orig) return;
+    const A = getBHC().m26.actions;
+    A[0].properties["multi-hit"] = m26Orig.hit; A[1].onTrigger = m26Orig.trig;
+    m26Orig = null;
+  },
+};
