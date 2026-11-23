@@ -164,6 +164,7 @@ export const coinFlipper = {
     { key: "cardMin", label: "Minimalny zysk generatorów", type: "number", default: 1, min: 1, step: 1 },
     { key: "spin", label: "Kręć kołem", type: "bool", default: true },
     { key: "passiveNoSpin", label: "Nie kręć kołem, gdy masz pasywne wheel points (ulepszenie kart 12)", type: "bool", default: true },
+    { key: "earlySpins", label: "Sloty: wymuś tyle obrotów na początku biegu kart (Paragon/Evo Shardy, tanie: 1e7–7e7 CP)", type: "number", default: 3, min: 0, max: 5, step: 1 },
     { key: "passiveNoSlot", label: "Nie kręć slotami, gdy masz pasywne żetony (ulepszenie kart 16)", type: "bool", default: true },
     { key: "saveSec", label: "Oszczędzaj CP na obrót, gdy brakuje ≤ tylu sekund produkcji", type: "number", default: 60, min: 0, step: 10 },
     { key: "reduceWheel", label: "Klikaj „Reduce wheels spun” po cooldownie (tańsze obroty, nieco mniej wheel points)", type: "bool", default: true },
@@ -290,6 +291,18 @@ export const coinFlipper = {
     // Sloty: najdroższy reset (zeruje CP, Coin Flip i całe koło). Gdy obrót slotów w zasięgu — oszczędzamy na niego.
     let slotHold = false;
     const sm = P.sm;
+    // Wymuszone obroty na starcie biegu kart (card reset zeruje licznik obrotów, więc pierwsze są tanie: 1e7, 2e7, 6.6e7 CP).
+    // Każdy symbol: 10% Paragon Shardy (+3), 10% Evolution Shardy (+6); pary/trójki ×2/×4.
+    if (ctx.p.earlySpins > 0 && sm && W().layers.sm && W().tmp.sm?.layerShown !== false && !sm.spinActive &&
+        D(sm.spinAmount).lt(ctx.p.earlySpins) && W().layers.sm.clickables[21].canClick()) {
+      const n = W().formatWhole(D(sm.spinAmount).add(1));
+      W().clickClickable("sm", 21);
+      if (sm.spinActive) {
+        ctx.state.slotStart = ctx.state.runStart = Date.now(); ctx.state.saving = ctx.state.slotSaving = false;
+        ctx.log(`Sloty: wymuszony obrót ${n}/${ctx.p.earlySpins} na starcie biegu`);
+        ctx.did(); ctx.status("wymuszony obrót slotów"); return;
+      }
+    }
     // Z pasywnymi żetonami (ulepszenie kart 16) obrót slotów tylko kasuje Coin Flip i koło — wtedy nie kręcimy.
     const slotPassive = ctx.p.passiveNoSlot && W().hasUpgrade("car", 16);
     const smOn = Boolean(ctx.p.slots && !slotPassive && sm && W().layers.sm && W().tmp.sm?.layerShown !== false);

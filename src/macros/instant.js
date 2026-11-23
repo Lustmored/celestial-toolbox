@@ -57,3 +57,31 @@ export const instantResources = {
     mem.pending = null; mem.prevRef = null;
   },
 };
+
+// Ritual (Check Back Shrine): wejście po cooldownie, gdy stać na koszt (Evolution + Paragon Shardy).
+// Walka toczy się w Space Battle — prowadzi ją makro „Walka statkami: bot”. Po pokonaniu ducha gra sama wychodzi z walki.
+export const ritualAutoEnter = {
+  id: "ritual-auto-enter",
+  name: "Ritual: wejście po cooldownie",
+  group: "Universe Epsilon",
+  every: 5,
+  description:
+    "Gdy cooldown rytuału minął, stać na koszt i statek jest gotowy, wchodzi do walki z duchem (Ascension Shardy). " +
+    "Do samej walki włącz makro „Walka statkami: bot”. Nie przerywa innej walki statkiem.",
+  params: [
+    { key: "psReserve", label: "Zostaw co najmniej Paragon Shardów ponad koszt rytuału", type: "number", default: 0, min: 0, step: 1 },
+  ],
+  available: () => Boolean(window.player?.cbs && window.layers.cbs?.clickables?.enter),
+  run(ctx) {
+    const P = window.player, cbs = P.cbs, D = x => new window.Decimal(x);
+    if (P.ir?.inBattle || cbs.inBattle) return ctx.status("trwa walka");
+    if (mem.pending != null) return ctx.status("czekam na makro instant resources");
+    if (D(cbs.ritualSpiritCooldown).gt(0)) return ctx.status(`cooldown ${window.formatTime(cbs.ritualSpiritCooldown)}`);
+    const [evo, ps] = cbs.ritualCosts.map(x => D(x));
+    if (D(P.cb.paragonShards).lt(ps.add(ctx.p.psReserve)) || D(P.cb.evolutionShards).lt(evo))
+      return ctx.status(`brak zasobów: ${window.formatWhole(evo)} Evo / ${window.formatWhole(ps)} Paragon Shards`);
+    if (!window.layers.cbs.clickables.enter.canClick()) return ctx.status("statek się chłodzi albo brak wybranego statku");
+    window.clickClickable("cbs", "enter");
+    if (P.ir?.inBattle || cbs.inBattle || window.arena) { ctx.log(`Ritual: start (−${window.formatWhole(evo)} Evo, −${window.formatWhole(ps)} PS)`); ctx.did(); ctx.status("walka z duchem"); }
+  },
+};
