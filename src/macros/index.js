@@ -3,7 +3,7 @@
 import { cbClaimAll, goldenCookies, dotKnight, fragmentation, singularityPets } from "./checkback.js";
 import { moonstone } from "./grids.js";
 import { hexVexes, dreamRealm } from "./hex.js";
-import { casinoKiller, smaAutoEnter, hiveUnpause, spaceLoop } from "./darkness.js";
+import { casinoKiller, punchcardLevelUp, smaAutoEnter, hiveUnpause, spaceLoop } from "./darkness.js";
 import { coreFragmentFarm } from "./corefrags.js";
 import { spaceDust } from "./space.js";
 import { petShop, fragmentShop } from "./shops.js";
@@ -22,7 +22,7 @@ export default [
   cbClaimAll, goldenCookies, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
   moonstone,
   hexVexes, dreamRealm,
-  casinoKiller, smaAutoEnter, hiveUnpause, spaceLoop, coreFragmentFarm,
+  casinoKiller, punchcardLevelUp, smaAutoEnter, hiveUnpause, spaceLoop, coreFragmentFarm,
   spaceDust,
   rocketPassengers,
   shipHunter, starExplore, instantResources, ritualAutoEnter,

@@ -286,3 +286,31 @@ export const spaceLoop = {
     ctx.status(`+${window.format(gain)} SE po ${sec.toFixed(1)} s · kupiono ${bought}`);
   },
 };
+
+// Punchcards: „Level Up” w kolekcji dla każdej karty, która ma XP na następny poziom (tak jak przycisk gry, łącznie z bulk).
+export const punchcardLevelUp = {
+  id: "punchcard-levelup",
+  name: "Punchcards: Level Up w kolekcji",
+  group: "Darkness / SMA",
+  every: 0.5,
+  description: "Awansuje każdą kartę w kolekcji, która ma XP na kolejny poziom (jak przycisk „Level Up” gry, wielokrotnie). Przydatne przy Blood Drain.",
+  params: [],
+  available: g => g.layerActive("pu") && Boolean(window.layers.pu?.levelables),
+  run(ctx) {
+    const L = window.layers.pu.levelables, pl = window.player.pu.levelables;
+    const ups = [];
+    for (const k of Object.keys(pl)) {
+      const id = Number(k);
+      if (!id || !L[id]?.xpReq) continue;
+      let n = 0;
+      for (; n < 1000; n++) {
+        const req = new window.Decimal(window.run(L[id].xpReq, L[id]));
+        if (req.lte(0) || window.getLevelableXP("pu", id).lt(req)) break;
+        window.addLevelableXP("pu", id, req.neg());
+        window.addLevelables("pu", id, 1);
+      }
+      if (n) ups.push(`${id}+${n}`);
+    }
+    if (ups.length) { window.updateLevelableTemp?.("pu"); ctx.did(ups.length); ctx.log("Level Up: " + ups.join(", ")); }
+  },
+};
