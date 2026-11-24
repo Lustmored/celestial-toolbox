@@ -244,3 +244,38 @@ export const singularityPets = {
     if (report.length) ctx.status(report.join(", "));
   },
 };
+
+// Cookie (ep2): klikanie złotych (i opcjonalnie gniewnych) ciasteczek — to cząsteczki z onClick, gra sama je usuwa po kliknięciu.
+// Spawn liczy się tylko w zakładce Cookie albo (3× wolniej) przy włączonym w grze „external golden cookie spawns”.
+export const goldenCookies = {
+  id: "golden-cookies",
+  name: "Cookie: klikaj złote ciasteczka",
+  group: "Check Back",
+  every: 0.5,
+  description:
+    "Klika pojawiające się złote ciasteczka (Chocolate Shards, Paragon Shards, ciasteczka, odnowienie shardów w Pet Shopie). " +
+    "Opcjonalnie włącza wbudowany przełącznik gry „external golden cookie spawns”, żeby pojawiały się też poza zakładką Cookie (3× rzadziej).",
+  params: [
+    { key: "external", label: "Włącz spawn poza zakładką Cookie (przełącznik gry)", type: "bool", default: true },
+    { key: "wrath", label: "Klikaj też gniewne ciasteczka (mogą zabrać część ciasteczek)", type: "bool", default: true },
+  ],
+  available: () => Boolean(window.player?.ep2 && window.tmp.ep2?.layerShown),
+  run(ctx) {
+    const ep2 = window.player.ep2;
+    if (ctx.p.external && !ep2.externalGolden) { ep2.externalGolden = true; ctx.log("Włączono spawn złotych ciasteczek poza zakładką Cookie"); }
+    let n = 0;
+    for (const id of Object.keys(window.particles ?? {})) {
+      const p = window.particles[id];
+      if (!p || typeof p.onClick !== "function") continue;
+      const img = String(p.image ?? "");
+      const gold = img.includes("gold_cookie"), wrath = img.includes("wrath_cookie");
+      if (!gold && !(wrath && ctx.p.wrath)) continue;
+      const choco = Number(ep2.chocoShards);
+      window.run(p.onClick, p);
+      n++;
+      if (Number(ep2.chocoShards) > choco) ctx.log(`Złote ciasteczko: +${window.formatWhole(Number(ep2.chocoShards) - choco)} Chocolate Shard`);
+    }
+    if (n) ctx.did(n);
+    ctx.status(`następne za ~${window.formatTime(ep2.goldenTimer)}${window.player.tab === "ep2" ? "" : " (poza zakładką: 3× wolniej)"} · klików: ${window.formatWhole(ep2.goldenClicks)}`);
+  },
+};
