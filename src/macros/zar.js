@@ -511,7 +511,7 @@ export const zarBlackjack = {
     { key: "reserve", label: "Rezerwa Evolution Shards (nie graj poniżej)", type: "number", default: 30000, min: 0, step: 1000 },
     { key: "games", label: "Gier na tick", type: "number", default: 3, min: 1, max: 20, step: 1 },
     { key: "buy", label: "Kupuj ZC-buyable", type: "bool", default: true },
-    { key: "weights", label: "Wagi ZC (11=ZC-1 CP, 15=ZC-5 chipy, 17=ZC-7 ×chipy, 18=ZC-8 tańsza gra, 16=ZC-6 potrójne)", type: "text", default: "11:8 15:2 17:2 18:1 16:1" },
+    { key: "weights", label: "Wagi ZC (11=ZC-1 CP, 12=ZC-2 kości, 13=ZC-3 ESC, 15=ZC-5 chipy, 16=ZC-6 potrójne, 17=ZC-7 ×chipy, 18=ZC-8 tańsza gra)", type: "text", default: "11:8 15:2 17:2 13:1 12:1 18:1 16:1" },
   ],
   available: () => Boolean(window.player?.zd && window.layers.zd?.clickables?.[13]),
   run(ctx) {
