@@ -1,3 +1,4 @@
+import { settings } from "../core/settings.js";
 // Punchcards (DU1) i wejście do Starmetal Alloy.
 
 const hasCard = id => window.getLevelableTier("pu", id, true) === true;
@@ -31,6 +32,9 @@ export const casinoKiller = {
       options: [["es", "Eclipse Shards (lista „Priorytet w Eclipse”)"], ["gj", "Grass Jump"]] },
     { key: "gj", label: "Priorytet w Eclipse – profil GJ", type: "text", default: "113 213 308 307 108 206 201" },
     { key: "sma", label: "Priorytet w SMA", type: "text", default: "100 302 300 301 111 209 203 101 201 306" },
+    { key: "smaProfile", label: "Profil w SMA", type: "select", default: "alloy",
+      options: [["alloy", "Starmetal Alloy (lista „Priorytet w SMA”)"], ["se", "Space Energy (lista „Priorytet w SMA – profil SE”)"]] },
+    { key: "se", label: "Priorytet w SMA – profil SE (Space, ×SE, Normality, Iridite)", type: "text", default: "302 300 401 111 209 110 212 301 203 101 201 306" },
     { key: "eclipse", label: "Priorytet w Eclipse", type: "text", default: "108 112 304 200 303 211 206 307 201 101" },
     { key: "legFill", label: "Po zapełnieniu listy: dobieraj wylosowane karty, polując na legendarną", type: "bool", default: true },
     { key: "legendary", label: "Legendarne, na które polować", type: "text", default: "401" },
@@ -47,7 +51,7 @@ export const casinoKiller = {
     const mode = inEclipse ? "eclipse" : inSMA ? "sma" : null;
     if (!mode) { ctx.status("poza SMA i Eclipse — wybory czekają na bieg"); return; }
     const prof = ctx.p.eclProfile;
-    const listKey = mode === "eclipse" && prof === "gj" ? "gj" : mode;
+    const listKey = mode === "eclipse" && prof === "gj" ? "gj" : mode === "sma" && ctx.p.smaProfile === "se" ? "se" : mode;
     const wanted = ctx.parseIds(ctx.p[listKey]).filter(id => (id < 400 || (id > 400 && id < 500)) && window.player.pu.levelables[id]);
 
     const activated = [];
@@ -187,7 +191,7 @@ export const spaceLoop = {
     "Do wyboru też „co klatkę” i „co stały czas”. Opcjonalnie kupuje buyable Space Energy/Space i robi resety Normality.",
   params: [
     { key: "buyN", label: "Kupuj ulepszenia i buyable Normality", type: "bool", default: true },
-    { key: "buyDs", label: "Kupuj też buyable Space Energy / Space", type: "bool", default: false },
+    { key: "buyDs", label: "Kupuj też buyable Space Energy / Space (zawsze w profilu SE w Casino Killer)", type: "bool", default: false },
     { key: "reset", label: "Rób reset Space Energy", type: "bool", default: true },
     { key: "mode", label: "Kiedy resetować", type: "select", default: "peak",
       options: [["tick", "co klatkę (najszybciej)"], ["peak", "na szczycie tempa zysku"], ["time", "co stały czas"]] },
@@ -232,7 +236,8 @@ export const spaceLoop = {
       }
       buyCheapest("dn", [11, 12, 13, 14, 15]);
     }
-    if (ctx.p.buyDs) buyCheapest("ds", Object.keys(window.layers.ds.buyables || {}).filter(k => !isNaN(k)).map(Number));
+    const seProfile = settings().macros?.["casino-killer"]?.params?.smaProfile === "se";
+    if (ctx.p.buyDs || seProfile) buyCheapest("ds", Object.keys(window.layers.ds.buyables || {}).filter(k => !isNaN(k)).map(Number));
     if (bought) ctx.did(bought);
 
     // opcjonalny reset Normality na szczycie tempa
