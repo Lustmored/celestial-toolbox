@@ -90,7 +90,7 @@ export const cbClaimAll = {
   every: 1,
   description:
     "Klika trzy przyciski Claim All w Check Back (XP, skrzynki, Pet Points), dwa Claim All u Marcela (Evo i Paragon Shards) " +
-    "oraz gotowe przyciski Dragona (tylko te, które gra Ci pokazuje). Opcjonalnie awansuje pety za zebrane XP " +
+    "oraz gotowe przyciski Dragona (tylko te, które gra Ci pokazuje) i Daily Orbs. Opcjonalnie awansuje pety za zebrane XP " +
     "i robi Ascend petów, które doszły do limitu poziomu (potem znów awansuje za resztę XP). " +
     "Opcjonalnie: odbiera XP Boost (z gotowych przycisków ten z największym zyskiem), potem Legendary Gems, " +
     "a Summon kieruje do legendarnego peta, któremu najmniej brakuje do awansu, i go awansuje.",
@@ -100,6 +100,7 @@ export const cbClaimAll = {
     { key: "xpBoost", label: "Odbieraj XP Boost (resetuje poziom CB)", type: "bool", default: false },
     { key: "legGems", label: "Odbieraj Legendary Gems (resetuje poziom i XP Boost)", type: "bool", default: false },
     { key: "summon", label: "Summon legendarnego peta (najbliżej awansu) + awans", type: "bool", default: false },
+    { key: "dailyOrbs", label: "Odbieraj Daily Orbs (gotowe przyciski, od największego)", type: "bool", default: true },
   ],
   available: g => g.layerActive("cb"),
   run(ctx) {
@@ -108,6 +109,13 @@ export const cbClaimAll = {
     for (const id of [99, 199]) if (ctx.click("ev8", id)) ctx.did();
     // Dragon: przyciski 1–3 (złoto) i 4–6; ctx.click pomija ukryte i nieodblokowane.
     for (let id = 1; id <= 6; id++) if (ctx.click("ep1", id)) ctx.did();
+    // Daily Orbs: od największego przycisku, żeby ewentualny Shard Boost (zużywany przy pierwszym odbiorze) trafił w największy.
+    if (ctx.p.dailyOrbs && window.player.ev2 && !window.tmp.ev2?.deactivated) {
+      for (const id of [14, 13, 12, 11]) {
+        const before = new window.Decimal(window.player.ev2.orbs);
+        if (ctx.click("ev2", id, { refresh: true })) { ctx.did(); ctx.log(`Daily Orbs: +${window.format(new window.Decimal(window.player.ev2.orbs).sub(before))} (dzień ${window.formatWhole(window.player.ev2.day)})`); }
+      }
+    }
 
     // XP Boost: każdy przycisk resetuje poziom CB, więc z gotowych bierzemy ten z największym zyskiem;
     // pozostałe poczekają, aż poziom znów dobije do ich progu.
