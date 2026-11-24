@@ -1,3 +1,4 @@
+import { settings } from "../core/settings.js";
 // Iridite: „instant resources” z zapisanych statków. Kliknięcie daje zasoby zależne od typu statku i ustawia cooldown slotu
 // (ten sam timer blokuje wybór i nadpisanie slotu — dlatego slot, którym latasz, wykluczamy). Ilość liczy się z aktualnie
 // wybranego statku, więc makro na chwilę wybiera statek ze slotu (jak przycisk „Select”), klika, i przywraca poprzedni wybór.
@@ -67,7 +68,7 @@ export const ritualAutoEnter = {
   every: 5,
   description:
     "Gdy cooldown rytuału minął, stać na koszt i statek jest gotowy, wchodzi do walki z duchem (Ascension Shardy). " +
-    "Do samej walki włącz makro „Walka statkami: bot”. Nie przerywa innej walki statkiem.",
+    "Wchodzi tylko przy włączonym makrze „Walka statkami: bot” (walka poniżej 90 s daje 2 Shards of Ascension, dłuższa 1). Nie przerywa innej walki statkiem.",
   params: [
     { key: "psReserve", label: "Zostaw co najmniej Paragon Shardów ponad koszt rytuału", type: "number", default: 0, min: 0, step: 1 },
   ],
@@ -75,6 +76,8 @@ export const ritualAutoEnter = {
   run(ctx) {
     const P = window.player, cbs = P.cbs, D = x => new window.Decimal(x);
     if (P.ir?.inBattle || cbs.inBattle) return ctx.status("trwa walka");
+    // Walka >90 s daje 1 Shard of Ascension zamiast 2 — bez bota statek nic nie zdziała, więc nie wchodzimy.
+    if (!settings().macros?.["ship-hunter"]?.enabled) return ctx.status("włącz „Walka statkami: bot” — bez niego rytuał trwa >90 s (1 shard zamiast 2)");
     if (mem.pending != null) return ctx.status("czekam na makro instant resources");
     if (D(cbs.ritualSpiritCooldown).gt(0)) return ctx.status(`cooldown ${window.formatTime(cbs.ritualSpiritCooldown)}`);
     const [evo, ps] = cbs.ritualCosts.map(x => D(x));
