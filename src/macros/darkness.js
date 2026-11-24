@@ -192,6 +192,7 @@ export const spaceLoop = {
   params: [
     { key: "buyN", label: "Kupuj ulepszenia i buyable Normality", type: "bool", default: true },
     { key: "buyDs", label: "Kupuj też buyable Space Energy / Space (zawsze w profilu SE w Casino Killer)", type: "bool", default: false },
+    { key: "seFrac", label: "Buyable za Space Energy (długość…spissitude): pojedynczy zakup maks. % posiadanej SE", type: "number", default: 5, min: 0, max: 100, step: 1 },
     { key: "reset", label: "Rób reset Space Energy", type: "bool", default: true },
     { key: "mode", label: "Kiedy resetować", type: "select", default: "peak",
       options: [["tick", "co klatkę (najszybciej)"], ["peak", "na szczycie tempa zysku"], ["time", "co stały czas"]] },
@@ -204,7 +205,7 @@ export const spaceLoop = {
   run(ctx) {
     const P = window.player, D = window.Decimal, st = ctx.state, now = Date.now();
     let bought = 0;
-    const buyCheapest = (layer, ids) => {
+    const buyCheapest = (layer, ids, maxFrac = null) => {
       for (let guard = 0; guard < 500; guard++) {
         let best = null;
         for (const id of ids) {
@@ -215,6 +216,7 @@ export const spaceLoop = {
           const lim = B.purchaseLimit ? new D(B.purchaseLimit.call(B)) : null;
           if (lim && new D(P[layer].buyables[id]).gte(lim)) continue;
           if (cur.lt(cost)) continue;
+          if (maxFrac?.[id] != null && cost.gt(cur.mul(maxFrac[id]))) continue; // nie przepalaj waluty, która liczy się do zapasu
           if (!best || cost.lt(best.cost)) best = { id, cost };
         }
         if (!best) break;
@@ -237,7 +239,11 @@ export const spaceLoop = {
       buyCheapest("dn", [11, 12, 13, 14, 15]);
     }
     const seProfile = settings().macros?.["casino-killer"]?.params?.smaProfile === "se";
-    if (ctx.p.buyDs || seProfile) buyCheapest("ds", Object.keys(window.layers.ds.buyables || {}).filter(k => !isNaN(k)).map(Number));
+    if (ctx.p.buyDs || seProfile) {
+      // Buyable 11–14 płacą Space Energy, z której liczy się zapas przy wyjściu z SMA — kupujemy je tylko za ułamek SE.
+      const f = Math.max(0, Math.min(1, ctx.p.seFrac / 100));
+      buyCheapest("ds", Object.keys(window.layers.ds.buyables || {}).filter(k => !isNaN(k)).map(Number), { 11: f, 12: f, 13: f, 14: f });
+    }
     if (bought) ctx.did(bought);
 
     // opcjonalny reset Normality na szczycie tempa
