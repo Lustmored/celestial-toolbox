@@ -206,7 +206,7 @@ export const singularityPets = {
   group: "Check Back",
   every: 4,
   description:
-    "Gdy punkty Kres/Nav/Sel/Eclipse są pełne: kupuje Stats, potem pozostałe buyables tańsze niż ułamek pojemności " +
+    "Najpierw kupuje ulepszenia Singularity Pets, gdy tylko się pojawią (i oszczędza na nie punkty). Gdy punkty Kres/Nav/Sel/Eclipse są pełne: kupuje Stats, potem pozostałe buyables tańsze niż ułamek pojemności " +
     "(od najtańszych), a jeśli nic nie kupiło — Capacity.",
   params: [
     { key: "cheapFraction", label: "Próg „tanie” (ułamek pojemności)", type: "number", default: 0.2, min: 0, max: 1, step: 0.05 },
@@ -227,14 +227,29 @@ export const singularityPets = {
   run(ctx) {
     const sp = window.player.sp;
     const report = [];
+    // Ulepszenia (np. Regenerative Anger) mają pierwszeństwo: kup od razu, a jeśli nie stać — oszczędzaj punkty tego peta
+    // (gdy pojemność za mała, kupuj tylko Capacity).
+    const waiting = {};
+    for (const id of Object.keys(window.layers.sp.upgrades ?? {}).filter(k => !isNaN(k))) {
+      const U = window.layers.sp.upgrades[id];
+      if (window.hasUpgrade("sp", id) || !window.tmp.sp.upgrades?.[id]?.unlocked) continue;
+      if (window.canAffordUpgrade("sp", id)) {
+        window.buyUpgrade("sp", id);
+        if (window.hasUpgrade("sp", id)) { ctx.did(); ctx.log(`Singularity Pets: kupiono ulepszenie „${window.run(U.title, U)}”`); continue; }
+      }
+      const key = String(U.currencyInternalName ?? "").replace(/Points$/, "");
+      if (key) waiting[key] = new window.Decimal(window.tmp.sp.upgrades[id].cost);
+    }
     for (const pet of SP_PETS) {
       if (!spUnlocked(pet)) continue;
+      const need = waiting[pet.key];
+      if (need && new window.Decimal(sp[pet.key + "PointsMax"]).gte(need)) { report.push(`${pet.name}: zbieram na ulepszenie (${window.formatWhole(need)})`); continue; }
       const result = spendWhenFull(ctx, {
         layer: "sp",
         points: () => sp[pet.key + "Points"],
         max: () => sp[pet.key + "PointsMax"],
-        first: [pet.base + 2],
-        others: [3, 4, 5].map(n => pet.base + n),
+        first: need ? [] : [pet.base + 2],
+        others: need ? [] : [3, 4, 5].map(n => pet.base + n),
         capacity: pet.base + 1,
         cheapFraction: ctx.p.cheapFraction,
         maxBuys: ctx.p.maxPerPet,
