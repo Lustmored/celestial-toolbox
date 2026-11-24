@@ -193,6 +193,7 @@ export const spaceLoop = {
     { key: "buyN", label: "Kupuj ulepszenia i buyable Normality", type: "bool", default: true },
     { key: "buyDs", label: "Kupuj też buyable Space Energy / Space (zawsze w profilu SE w Casino Killer)", type: "bool", default: false },
     { key: "seFrac", label: "Buyable za Space Energy (długość…spissitude): pojedynczy zakup maks. % posiadanej SE", type: "number", default: 5, min: 0, max: 100, step: 1 },
+    { key: "seWindow", label: "…i tylko przez pierwsze N s przebiegu SMA (0 = cały przebieg)", type: "number", default: 120, min: 0, step: 10 },
     { key: "reset", label: "Rób reset Space Energy", type: "bool", default: true },
     { key: "mode", label: "Kiedy resetować", type: "select", default: "peak",
       options: [["tick", "co klatkę (najszybciej)"], ["peak", "na szczycie tempa zysku"], ["time", "co stały czas"]] },
@@ -241,7 +242,12 @@ export const spaceLoop = {
     const seProfile = settings().macros?.["casino-killer"]?.params?.smaProfile === "se";
     if (ctx.p.buyDs || seProfile) {
       // Buyable 11–14 płacą Space Energy, z której liczy się zapas przy wyjściu z SMA — kupujemy je tylko za ułamek SE.
-      const f = Math.max(0, Math.min(1, ctx.p.seFrac / 100));
+      // …i tylko na początku przebiegu SMA: później SE trzeba już zbierać na zapas, a zakupy przestają się zwracać.
+      const inSMA = Boolean(P.sma?.inStarmetalChallenge) && !P.pet?.legPetTimers?.[0]?.active;
+      if (inSMA && !st.smaIn) st.smaStart = now;
+      st.smaIn = inSMA;
+      const early = !ctx.p.seWindow || (inSMA && st.smaStart && (now - st.smaStart) / 1000 < ctx.p.seWindow);
+      const f = early ? Math.max(0, Math.min(1, ctx.p.seFrac / 100)) : 0;
       buyCheapest("ds", Object.keys(window.layers.ds.buyables || {}).filter(k => !isNaN(k)).map(Number), { 11: f, 12: f, 13: f, 14: f });
     }
     if (bought) ctx.did(bought);
