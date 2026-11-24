@@ -204,9 +204,12 @@ export const coinFlipper = {
         // Twierdzenie o wartości krańcowej: resetujemy, gdy bieżący przyrost zysku (z ostatnich ~20% runu)
         // spadnie poniżej średniego tempa całego runu — dalsze czekanie obniżałoby średnią.
         const hist = (ctx.state.cardHist ??= []);
-        hist.push([now, maxGet]);
         const w = Math.max(4000, 0.2 * elapsed);
+        // Próbkujemy co ~w/50, żeby historia (zapisywana w ustawieniach) nie rosła z każdym tickiem.
+        const last = hist[hist.length - 1];
+        if (!last || now - last[0] >= w / 50) hist.push([now, maxGet]);
         while (hist.length > 2 && hist[1][0] <= now - w) hist.shift();
+        if (hist.length > 120) { const k = Math.ceil(hist.length / 60); ctx.state.cardHist = hist.filter((_, i) => i % k === 0 || i === hist.length - 1); }
         const [t0, g0] = hist[0];
         const marginal = (maxGet - g0) / Math.max(1, (now - t0) / 1000);
         const avg = maxGet / (elapsed / 1000);

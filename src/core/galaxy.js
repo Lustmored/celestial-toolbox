@@ -88,7 +88,16 @@ export const _test = { pack, unpack };
 export async function cloudSave(toolboxSettings) {
   if (!inGalaxyFrame()) throw new Error("otwórz grę przez galaxy.click/play/470");
   window.save?.(true);
-  const data = await pack(JSON.stringify(window.player), toolboxSettings);
+  let data = await pack(JSON.stringify(window.player), toolboxSettings);
+  if (data.length > LIMIT && toolboxSettings) {
+    // Awaryjnie: bez wewnętrznego stanu makr (liczniki, historie) — ustawienia i parametry zostają.
+    try {
+      const s = JSON.parse(toolboxSettings);
+      for (const m of Object.values(s.macros ?? {})) delete m.state;
+      toolboxSettings = JSON.stringify(s);
+      data = await pack(JSON.stringify(window.player), toolboxSettings);
+    } catch {}
+  }
   if (data.length > LIMIT) {
     const kb = n => Math.round(n / 1000);
     throw new Error(`save za duży: ${kb(data.length)} kB po kompresji, limit ${kb(LIMIT)} kB ` +
