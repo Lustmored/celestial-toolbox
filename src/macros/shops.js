@@ -249,8 +249,9 @@ export const petShop = {
 };
 
 // Indeks w sklepie Fragmentation -> pet, któremu przybywa XP (3 = Singularity Fragments dla Kres/Nav/Sel).
-const FRAG_ITEMS = { 0: 401, 1: 402, 2: 403, 3: "sing", 4: 110, 5: 210, 6: 310 };
-const SING_PETS = [404, 405, 406];
+const FRAG_ITEMS = { 0: 401, 1: 402, 2: 403, 3: "sing", 4: 110, 5: 210, 6: 310, 7: 501, 8: 502, 9: 503, 10: "anti" };
+// Pule petów kupowanych wspólną walutą fragmentów: idzie w najtańszy następny poziom.
+const FRAG_POOLS = { sing: { pets: [404, 405, 406], cur: "singularityFragments" }, anti: { pets: [407], cur: "antiSingularityFragments" } };
 
 export const fragmentShop = {
   id: "fragment-shop",
@@ -259,11 +260,12 @@ export const fragmentShop = {
   every: 5,
   description:
     "Sklep we Fragmentation: gdy pozycja jest gotowa, kupuje tyle fragmentów, ile brakuje do następnego poziomu peta, i go awansuje. " +
-    "Singularity Fragment idzie w najtańszy następny poziom Kres/Nav/Sel. Przy ścisłej kolejności nie kupuje niższych pozycji, " +
+    "Singularity / Anti-Singularity Fragment idzie w najtańszy następny poziom petów z tej puli. Legendarne (Eclipse, Geroa, Vespasian) dostają XP wprost. Przy ścisłej kolejności nie kupuje niższych pozycji, " +
     "gdy wyższa jest gotowa, ale za droga.",
   params: [
-    { key: "order", label: "Kolejność (0 Dotknight, 1 Dragon, 2 Cookie, 3 Singularity, 4 Coin, 5 Refined, 6 Evolution)", type: "text", default: "1 0 2 3 4 5 6" },
-    { key: "strict", label: "Ścisła kolejność (oszczędzaj na wyższe pozycje)", type: "bool", default: true },
+    { key: "order", label: "Kolejność (0 Dotknight, 1 Dragon, 2 Cookie, 3 Singularity, 4 Coin, 5 Refined, 6 Evolution, 7 Eclipse, 8 Geroa, 9 Vespasian, 10 Anti-Singularity)", type: "text", default: "7 8 1 0 2 3 9 10 4 5 6" },
+    { key: "strict", label: "Ścisła kolejność (oszczędzaj na wyższe pozycje)", type: "bool", default: false },
+    { key: "partial", label: "Legendarne (Eclipse/Geroa/Vespasian): gdy nie stać na cały poziom, kupuj częściowo (XP zostaje)", type: "bool", default: true },
   ],
   available: g => g.layerActive("pet") && tabVisible("content", "Fragmentation") && tabVisible("frags", "Shop"),
   run(ctx) {
@@ -278,11 +280,12 @@ export const fragmentShop = {
         if (target === undefined || !slot || !clickVisible(fragSel[idx]) || slot.current.gte(0)) continue;
 
         let pid = target, need;
-        if (target === "sing") {
-          const opts = SING_PETS.map(id => {
+        if (FRAG_POOLS[target]) {
+          const pool = FRAG_POOLS[target];
+          const opts = pool.pets.map(id => {
             const d = p.levelables[id], t = window.tmp.pet.levelables[id];
-            if (!t?.unlocked || window.Decimal.gte(d[0], t.levelLimit)) return null;
-            return { id, need: Math.max(0, Math.ceil(Number(window.Decimal.sub(t.xpReq, p.singularityFragments)))) };
+            if (!d || !t?.unlocked || window.Decimal.gte(d[0], t.levelLimit)) return null;
+            return { id, need: Math.max(0, Math.ceil(Number(window.Decimal.sub(t.xpReq, p[pool.cur] ?? 0)))) };
           }).filter(Boolean).sort((a, b) => a.need - b.need);
           if (!opts.length) continue;
           ({ id: pid, need } = opts[0]);
@@ -300,6 +303,12 @@ export const fragmentShop = {
           bought.push(`${idx}×${need}`);
         } else if (ctx.p.strict) {
           break; // gotowa, ale za droga — nie wydawaj na niższe pozycje
+        } else if (ctx.p.partial && [501, 502, 503].includes(pid)) {
+          // Nie stać na cały poziom: kup tyle, ile się da (XP/fragmenty zostają na następny raz).
+          let lo = 0, hi = need - 1;
+          const can = n => { setBulk("fragShopInput", n); window.updateClickableTemp?.("pet"); return Boolean(window.tmp.pet.clickables[fragBuy]?.canClick); };
+          while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (can(mid)) lo = mid; else hi = mid - 1; }
+          if (lo >= 1) { setBulk("fragShopInput", lo); if (ctx.click("pet", fragBuy, { refresh: true })) { ctx.did(); bought.push(`${idx}×${lo} (częściowo)`); } }
         }
       }
     });
