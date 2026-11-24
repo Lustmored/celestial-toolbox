@@ -473,3 +473,74 @@ export const cardsHelper = {
     ctx.status(parts.join(" · "));
   },
 };
+
+// Zar's Dungeon: blackjack o Zar Chips. Zasady gry: krupier dobiera, aż przebije wynik gracza albo dojdzie do 21;
+// 21 gracza zawsze wygrywa. Strategię policzono dokładnie (talia ~nieskończona): P(wygranej) ≈ 48%.
+// Wygrana zwraca stawkę Evolution Shards i daje Zar Chips; przegrana zabiera stawkę.
+const ZD_HARD = { 15: [5, 6], 16: [2, 3, 4, 5, 6] }; // stój przy twardych 15/16 tylko na te karty krupiera
+function zdTotal(hand) {
+  let t = 0, a = 0;
+  for (const c of hand) {
+    const r = String(c).replace(/^(Club|Heart|Diamond|Spade)/, "");
+    const v = r === "J" || r === "Q" || r === "K" ? 10 : r === "1" ? 11 : parseInt(r, 10) || 0;
+    if (v === 11) a++;
+    t += v;
+  }
+  while (t > 21 && a > 0) { t -= 10; a--; }
+  return { t, soft: a > 0 };
+}
+function zdShouldHit(hand, dealerCard) {
+  const { t, soft } = zdTotal(hand);
+  const up = zdTotal([dealerCard]).t;
+  if (t >= 21) return false;
+  if (soft) return t <= 17 || (t === 18 && (up === 11 || up >= 9));
+  if (t <= 14) return true;
+  if (t >= 17) return false;
+  return !(ZD_HARD[t] || []).includes(up);
+}
+
+export const zarBlackjack = {
+  id: "zar-blackjack",
+  name: "Zar's Dungeon: blackjack o Zar Chips",
+  group: "Universe Epsilon",
+  every: 0.5,
+  description:
+    "Gra w blackjacka optymalną strategią (~48% wygranych) i od razu wydaje Zar Chips na ZC-buyable (domyślnie głównie ZC-1: ×4 Chance Points). " +
+    "Nie gra, gdy Evolution Shardów zostałoby mniej niż rezerwa.",
+  params: [
+    { key: "reserve", label: "Rezerwa Evolution Shards (nie graj poniżej)", type: "number", default: 30000, min: 0, step: 1000 },
+    { key: "games", label: "Gier na tick", type: "number", default: 3, min: 1, max: 20, step: 1 },
+    { key: "buy", label: "Kupuj ZC-buyable", type: "bool", default: true },
+    { key: "weights", label: "Wagi ZC (11=ZC-1 CP, 15=ZC-5 chipy, 17=ZC-7 ×chipy, 18=ZC-8 tańsza gra, 16=ZC-6 potrójne)", type: "text", default: "11:8 15:2 17:2 18:1 16:1" },
+  ],
+  available: () => Boolean(window.player?.zd && window.layers.zd?.clickables?.[13]),
+  run(ctx) {
+    const P = W().player, zd = P.zd, L = W().layers.zd;
+    if (P.bh?.currentStage === "zarDungeon") return ctx.status("trwa walka w Zar's Dungeon (BH)");
+    let won = 0, lost = 0;
+    for (let g = 0; g < ctx.p.games; g++) {
+      if (zd.gameOver) {
+        if (D(P.cb.evolutionShards).sub(zd.gameCost).lt(ctx.p.reserve)) break;
+        if (!L.clickables[13].canClick()) break;
+        W().clickClickable("zd", 13);
+      }
+      for (let step = 0; step < 12 && !zd.gameOver; step++) {
+        const hand = zd.playerHand;
+        if (Array.isArray(hand[0])) break; // podział rąk — tego nie obsługujemy
+        W().clickClickable("zd", zdShouldHit(hand, zd.dealerHand[0]) ? 11 : 12);
+        L.update(0);
+      }
+      if (!zd.gameOver) break;
+      const p = zdTotal(zd.playerHand).t, d = zdTotal(zd.dealerHand).t;
+      (p <= 21 && (p === 21 || d > 21 || p > d) ? won++ : lost++);
+    }
+    let bought = 0;
+    if (ctx.p.buy) bought = buyGroup("zd", [11, 12, 13, 15, 16, 17, 18], parseWeights(ctx.p.weights), 100);
+    if (won + lost) {
+      ctx.did(won + lost);
+      ctx.state.w = (ctx.state.w ?? 0) + won; ctx.state.l = (ctx.state.l ?? 0) + lost;
+    }
+    if (bought) ctx.log(`Zar Chips → ${bought} ZC (ZC-1: ${W().formatWhole(W().getBuyableAmount("zd", 11))})`);
+    ctx.status(`wygrane ${ctx.state.w ?? 0} / przegrane ${ctx.state.l ?? 0} · stawka ${W().formatWhole(zd.gameCost)} Evo · ZC-1 ${W().formatWhole(W().getBuyableAmount("zd", 11))}/100`);
+  },
+};

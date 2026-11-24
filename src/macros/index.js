@@ -13,7 +13,7 @@ import { shipHunter } from "./ship.js";
 import { starExplore } from "./exploration.js";
 import { pollenLoop, nectarLoop, flowerPicker, hiveResearch, twigCollector, flowerGilding, nestFarm } from "./hive.js";
 import { numbnessLoop } from "./numbness.js";
-import { coinFlipper, cardsHelper } from "./zar.js";
+import { coinFlipper, cardsHelper, zarBlackjack } from "./zar.js";
 import { rocketFuelXp } from "./rocketfuel.js";
 import { instantResources, ritualAutoEnter } from "./instant.js";
 import { stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26 } from "./tweaks.js";
@@ -28,6 +28,6 @@ export default [
   shipHunter, starExplore, instantResources, ritualAutoEnter,
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding, nestFarm, rocketFuelXp,
   numbnessLoop,
-  coinFlipper, cardsHelper, stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26,
+  coinFlipper, cardsHelper, zarBlackjack, stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26,
   bhSkillButtons, labAutoEnter,
 ];
