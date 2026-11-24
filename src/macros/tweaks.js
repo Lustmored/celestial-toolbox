@@ -76,7 +76,12 @@ function scWalk(node, fnode) {
   if (!node || typeof node !== "object") return;
   if (Array.isArray(node) && node[0] === "raw-html" && typeof node[1] === "function" && !node[1].__ctbOrig && SC_RE.test(String(node[1]))) {
     const orig = node[1];
-    const wrapped = function (...a) { const r = orig.apply(this, a); return r === "" || r == null ? "&nbsp;" : r; };
+    // <sup> (np. SOFTCAP²) podnosi wysokość linii — line-height:0 trzyma ją jak pustą.
+    const wrapped = function (...a) {
+      const r = orig.apply(this, a);
+      if (r === "" || r == null) return "&nbsp;";
+      return typeof r === "string" ? r.replace(/<sup>/gi, "<sup style='line-height:0'>") : r;
+    };
     wrapped.__ctbOrig = orig;
     node[1] = wrapped;
     if (fnode && typeof fnode[1] === "function") fnode[1] = wrapped;
