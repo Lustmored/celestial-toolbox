@@ -271,3 +271,22 @@ export const fixM26 = {
     bulletsOrig = null;
   },
 };
+
+// Rytuał daje 2 Shards of Ascension, gdy walka trwała < 90 s (licznik player.cbs.ritualDuration), inaczej 1.
+// Przy zamulonej karcie / pracy w tle walka trwa dłużej niż powinna — przełącznik trzyma licznik poniżej progu w trakcie walki.
+let ritualClampTimer = null;
+export const ritualTwoShards = {
+  id: "tweak-ritual-two-shards",
+  name: "Ritual: zawsze 2 Shards of Ascension",
+  group: "Inne",
+  toggle: true,
+  description: "W trakcie walki z duchem rytuału trzyma licznik czasu walki poniżej 90 s, więc wygrana zawsze daje 2 Shards of Ascension (zamiast 1 przy dłuższej walce).",
+  available: () => Boolean(window.player?.cbs && "ritualDuration" in window.player.cbs),
+  onEnable() {
+    ritualClampTimer ??= setInterval(() => {
+      const P = window.player;
+      if (P?.ir?.inBattle && P.subtabs?.cbs?.stuff === "Battle" && Number(P.cbs.ritualDuration) > 60) P.cbs.ritualDuration = 60;
+    }, 500);
+  },
+  onDisable() { clearInterval(ritualClampTimer); ritualClampTimer = null; },
+};

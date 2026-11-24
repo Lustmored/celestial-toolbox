@@ -16,7 +16,7 @@ import { numbnessLoop } from "./numbness.js";
 import { coinFlipper, cardsHelper } from "./zar.js";
 import { rocketFuelXp } from "./rocketfuel.js";
 import { instantResources, ritualAutoEnter } from "./instant.js";
-import { stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, fixM26 } from "./tweaks.js";
+import { stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26 } from "./tweaks.js";
 
 export default [
   cbClaimAll, goldenCookies, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -28,6 +28,6 @@ export default [
   shipHunter, starExplore, instantResources, ritualAutoEnter,
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding, nestFarm, rocketFuelXp,
   numbnessLoop,
-  coinFlipper, cardsHelper, stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, fixM26,
+  coinFlipper, cardsHelper, stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26,
   bhSkillButtons, labAutoEnter,
 ];
