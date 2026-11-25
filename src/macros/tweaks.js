@@ -290,7 +290,7 @@ export const ritualTwoShards = {
   onEnable() {
     ritualClampTimer ??= setInterval(() => {
       const P = window.player;
-      if (P?.ir?.inBattle && P.subtabs?.cbs?.stuff === "Battle" && Number(P.cbs.ritualDuration) > 60) P.cbs.ritualDuration = 60;
+      if (P?.ir?.inBattle && P.ir.battleStage === "ascensionRitual" && Number(P.cbs.ritualDuration) > 60) P.cbs.ritualDuration = 60;
     }, 500);
   },
   onDisable() { clearInterval(ritualClampTimer); ritualClampTimer = null; },

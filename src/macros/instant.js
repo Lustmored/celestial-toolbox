@@ -59,6 +59,9 @@ export const instantResources = {
   },
 };
 
+// `arena` w grze to globalne `let`, więc nie ma go na window — czytamy przez eval w zasięgu globalnym.
+const liveArena = () => { try { return window.eval("typeof arena !== 'undefined' ? arena : null"); } catch { return null; } };
+
 // Ritual (Check Back Shrine): wejście po cooldownie, gdy stać na koszt (Evolution + Paragon Shardy).
 // Walka toczy się w Space Battle — prowadzi ją makro „Walka statkami: bot”. Po pokonaniu ducha gra sama wychodzi z walki.
 export const ritualAutoEnter = {
@@ -75,6 +78,16 @@ export const ritualAutoEnter = {
   available: () => Boolean(window.player?.cbs && window.layers.cbs?.clickables?.enter),
   run(ctx) {
     const P = window.player, cbs = P.cbs, D = x => new window.Decimal(x);
+    if (P.ir?.inBattle && P.ir.battleStage === "ascensionRitual" && !liveArena()) {
+      // Rytuał „zawieszony” bez areny (np. wejście spoza zakładki shrine) — chowa zakładki Ritual/Pylon. Wychodzimy.
+      P.tab = "cbs"; window.SB_exitRun?.(); P.subtabs.cbs.stuff = "Ritual";
+      ctx.log("Ritual: wyjście z zawieszonej walki (brak areny)"); ctx.did(); return;
+    }
+    if (P.ir?.inBattle && P.ir.battleStage === "ascensionRitual" && P.subtabs.cbs?.stuff !== "Battle") {
+      // Arena jest, ale gra nie przełączyła widoku — pokazujemy walkę w zakładce shrine.
+      if (P.tab !== "cbs") window.showTab ? window.showTab("cbs") : (P.tab = "cbs");
+      P.subtabs.cbs.stuff = "Battle"; ctx.did(); return ctx.status("walka z duchem — przywrócono widok");
+    }
     if (P.ir?.inBattle || cbs.inBattle) return ctx.status("trwa walka");
     // Walka >90 s daje 1 Shard of Ascension zamiast 2 — bez bota statek nic nie zdziała, więc nie wchodzimy.
     if (!settings().macros?.["ship-hunter"]?.enabled) return ctx.status("włącz „Walka statkami: bot” — bez niego rytuał trwa >90 s (1 shard zamiast 2)");
@@ -84,7 +97,9 @@ export const ritualAutoEnter = {
     if (D(P.cb.paragonShards).lt(ps.add(ctx.p.psReserve)) || D(P.cb.evolutionShards).lt(evo))
       return ctx.status(`brak zasobów: ${window.formatWhole(evo)} Evo / ${window.formatWhole(ps)} Paragon Shards`);
     if (!window.layers.cbs.clickables.enter.canClick()) return ctx.status("statek się chłodzi albo brak wybranego statku");
+    // Gra ustawia widok walki i pauzy uniwersów tylko, gdy otwarta jest zakładka shrine — przełączamy na nią.
+    if (P.tab !== "cbs") window.showTab ? window.showTab("cbs") : (P.tab = "cbs");
     window.clickClickable("cbs", "enter");
-    if (P.ir?.inBattle || cbs.inBattle || window.arena) { ctx.log(`Ritual: start (−${window.formatWhole(evo)} Evo, −${window.formatWhole(ps)} PS)`); ctx.did(); ctx.status("walka z duchem"); }
+    if (P.ir?.inBattle || cbs.inBattle || liveArena()) { ctx.log(`Ritual: start (−${window.formatWhole(evo)} Evo, −${window.formatWhole(ps)} PS)`); ctx.did(); ctx.status("walka z duchem"); }
   },
 };
