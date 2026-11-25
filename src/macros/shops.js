@@ -121,12 +121,14 @@ export const petShop = {
   description:
     "Zarządza wydawaniem PP. 1) Paragon Shardy: na kilka godzin przed odświeżeniem sklepu odkłada PP na docelowy bulk, " +
     "a po odświeżeniu kupuje największy bulk (min–max), na jaki stać (do celu albo do podanego % PP, jeśli to więcej). 2) Pety z Pet Shopu (tyle, ile brakuje do awansu + zapas XP pod Fragmentation, najtańsze awanse najpierw) " +
-    "i Button Enhancement (najtańsze poziomy najpierw) dzielą resztę wg docelowego udziału w wydatkach z ostatnich dni; " +
+    "ESC (szansa na Evo Shardy) z Button Enhancement idzie poza kolejką, póki poziom kosztuje ≤ podanego % PP. " +
+    "Pety i reszta Button Enhancement (najtańsze poziomy najpierw) dzielą resztę wg docelowego udziału w wydatkach z ostatnich dni; " +
     "gdy jedna strona nie ma nic do kupienia, druga wydaje dalej.",
   params: [
     { key: "order", label: "Kolejność grup petów", type: "text", default: "rare uncommon common" },
     { key: "beShare", label: "Button Enhancement: docelowy % wydatków (0 = nie kupuj)", type: "number", default: 25, min: 0, max: 100, step: 5 },
-    { key: "beEsc", label: "Button Enhancement: kupuj też ESC (szansa na Evo Shardy)", type: "bool", default: false },
+    { key: "beEsc", label: "Button Enhancement: kupuj też ESC w ramach udziału", type: "bool", default: true },
+    { key: "escPct", label: "ESC (szansa na Evo Shardy) poza kolejką: kupuj najtańszy poziom, gdy kosztuje ≤ % PP (0 = wyłącz)", type: "number", default: 25, min: 0, max: 100, step: 5 },
     { key: "paragonPct", label: "Paragon Shardy: maks. % obecnych PP ponad cel (0 = nie kupuj)", type: "number", default: 40, min: 0, max: 100, step: 5 },
     { key: "paragonTarget", label: "Paragon Shardy: docelowy bulk (na niego odkładamy PP)", type: "number", default: 20, min: 1, step: 1 },
     { key: "paragonSaveHours", label: "Paragon Shardy: zacznij odkładać PP (h przed odświeżeniem)", type: "number", default: 8, min: 0, step: 1 },
@@ -213,6 +215,24 @@ export const petShop = {
         return best;
       };
       const ok = cost => cost <= ctx.p.maxCost && pp() - cost >= reserve;
+
+      // --- 2b. ESC (Evolution Shard Chance) ma priorytet: najtańszy poziom, póki kosztuje ≤ escPct% PP (bez limitu maxCost).
+      if (beOn && ctx.p.escPct > 0) for (let guard = 0; guard < 60; guard++) {
+        let best = null;
+        for (const id in window.layers.ev1.buyables) {
+          if (isNaN(id) || beType(id) !== 4) continue;
+          const t = window.tmp.ev1.buyables[id];
+          if (!t?.unlocked || !t.canBuy) continue;
+          const cost = Number(t.cost);
+          if (!best || cost < best.cost) best = { id, cost };
+        }
+        if (!best || best.cost > pp() * ctx.p.escPct / 100 || pp() - best.cost < reserve) break;
+        const before = pp();
+        ctx.buyOne("ev1", best.id);
+        const spent = before - pp();
+        if (spent <= 0) break;
+        st.be += spent; ctx.did(); bought.push(`ESC ${best.id}`);
+      }
 
       // --- 3. Naprzemiennie wg udziału w wydatkach ---
       for (let guard = 0; guard < 200; guard++) {
