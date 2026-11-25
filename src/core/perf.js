@@ -9,14 +9,19 @@ export function perfTick(tStart, tGameEnd, tEnd) {
   st.tb += tEnd - tGameEnd;
 }
 
+let gen = 0;
 function frame(t) {
+  if (frame.gen !== gen) return;
   st.frames.push(t);
   requestAnimationFrame(frame);
 }
 
 export function startPerf() {
+  // Po aktualizacji toolboxa bez odświeżania strony: zatrzymaj poprzedni licznik.
+  if (window.__ctbPerfStop) window.__ctbPerfStop();
+  frame.gen = ++gen;
   requestAnimationFrame(frame);
-  setInterval(() => {
+  const timer = setInterval(() => {
     const now = performance.now(), from = now - W * 1000;
     st.frames = st.frames.filter(t => t >= from);
     st.ticks = st.ticks.filter(t => t >= from);
@@ -36,6 +41,7 @@ export function startPerf() {
     perf.hidden = document.hidden;
     for (const fn of listeners) try { fn(perf); } catch {}
   }, 1000);
+  window.__ctbPerfStop = () => { clearInterval(timer); gen++; };
 }
 
 const listeners = [];

@@ -27,9 +27,6 @@ const CSS = `
 .root.collapsed .body, .root.collapsed .head .title, .root.collapsed .head .pause, .root.collapsed .foot { display: none; }
 .root.collapsed .head { flex-direction: column; padding: 6px 0; }
 .head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #2c2e3a; }
-.perf { font: 11px monospace; color: #888a99; padding: 2px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.perf.bad { color: #ff7a7a; }
-.root.collapsed .perf { display: none; }
 .title { font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title small { color: #888a99; font-weight: 400; }
 button { font: inherit; color: inherit; background: #262836; border: 1px solid #3a3c4a; border-radius: 4px;
@@ -183,18 +180,33 @@ export function mountUI(version) {
     rows.push(row);
   }
 
-  const perfEl = h("div", { class: "perf", title: "FPS: klatki przeglądarki/s · TPS: ticki gry/s (gra celuje w 20) · max: najdłuższa przerwa między tickami (5 s) · gra/toolbox: % czasu CPU w ticku" }, "…");
+  // Licznik płynności: osobny, stały dymek przy dolnej krawędzi ekranu (poza panelem), stała szerokość pól.
+  document.getElementById("ctb-perf")?.remove(); // po aktualizacji bez odświeżania
+  const perfEl = document.createElement("div");
+  perfEl.id = "ctb-perf";
+  perfEl.title = "FPS: klatki przeglądarki/s · TPS: ticki gry/s (gra celuje w 20) · max: najdłuższa przerwa między tickami (5 s) · gra/toolbox: % czasu CPU w ticku";
+  Object.assign(perfEl.style, {
+    position: "fixed", bottom: "4px", left: "50%", transform: "translateX(-50%)", zIndex: "2147483646",
+    font: "11px/1.4 ui-monospace, Consolas, monospace", whiteSpace: "pre", padding: "2px 8px",
+    background: "rgba(20,21,28,0.85)", color: "#9aa0b4", border: "1px solid #3a3d4d", borderRadius: "8px",
+    pointerEvents: "auto", userSelect: "none",
+  });
+  perfEl.textContent = "Toolbox: pomiar…";
+  document.body.append(perfEl);
   startPerf();
+  const pad = (v, n) => String(v).padStart(n, " ");
   onPerf(p => {
     const bad = p.tps < 18 || p.maxGap > 200;
-    perfEl.classList.toggle("bad", bad);
-    perfEl.textContent = `${Math.round(p.fps)} FPS · ${p.tps.toFixed(1)} TPS · max ${Math.round(p.maxGap)} ms · gra ${p.gamePct.toFixed(0)}% · toolbox ${p.tbPct.toFixed(1)}%${p.hidden ? " · karta w tle" : ""}`;
+    perfEl.style.color = bad ? "#ff7a7a" : "#9aa0b4";
+    perfEl.style.borderColor = bad ? "#7a3a3a" : "#3a3d4d";
+    perfEl.textContent =
+      `${pad(Math.round(p.fps), 3)} FPS │ ${pad(p.tps.toFixed(1), 4)} TPS │ max ${pad(Math.round(p.maxGap), 5)} ms │ ` +
+      `gra ${pad(p.gamePct.toFixed(0), 3)}% │ toolbox ${pad(p.tbPct.toFixed(1), 5)}%${p.hidden ? " │ karta w tle" : ""}`;
   });
   root.append(
     h("div", { class: "head" },
       h("div", { class: "title" }, "Celestial Toolbox ", h("small", {}, "v" + version)),
       pauseBtn, collapseBtn),
-    perfEl,
     h("div", { class: "body" },
       [...groups].map(([name, els]) => {
         const d = h("details", { class: "group", open: "" }, h("summary", {}, name), els);
