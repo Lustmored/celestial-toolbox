@@ -342,6 +342,24 @@ const buyMax = (layer, id) => {
   b.buy.call(b, true);
   return Number(window.getBuyableAmount(layer, id)) - before;
 };
+const buyOne = (layer, id) => {
+  const b = window.layers[layer]?.buyables?.[id];
+  if (!b) return false;
+  const before = Number(window.getBuyableAmount(layer, id));
+  if (new window.Decimal(before).gte(b.purchaseLimit()) || !b.canAfford.call(b)) return false;
+  b.buy.call(b);
+  return Number(window.getBuyableAmount(layer, id)) > before;
+};
+/** Chmury: na zmianę Transpiration (16) i Vaporized Clouds (11), pojedynczo. Zwraca, czy kupiono 16. */
+const growClouds = () => {
+  let got16 = false;
+  for (let g = 0; g < 400; g++) {
+    const a = buyOne("dv", 16), b = buyOne("dv", 11);
+    got16 ||= a;
+    if (!a && !b) break;
+  }
+  return got16;
+};
 const dvUpgradesLeft = () => [11, 12, 13, 14].filter(id => {
   const u = window.layers.dv?.upgrades?.[id];
   return u && window.run(u.unlocked, u) && !window.hasUpgrade("dv", id);
@@ -388,25 +406,39 @@ export const eclipseRun = {
   description:
     "Prowadzi cały bieg Eclipse. 1) Grind: reset Light Extractora (Eclipse Shards), gdy tylko się da; boostery (pojedynczo do limitu, " +
     "z bulkiem bez limitu); Dark Grass buyables, dopóki gra ich nie automatyzuje. 2) Gdy postęp stanie, a brakuje ulepszeń Vaporizera: " +
-    "produkcja chmur, kupno buyables i ulepszeń (m.in. bulk boosterów), potem stop i chmury na 0. 3) Dalej grind. " +
+    "(po wymaksowaniu trawy) produkcja chmur: Transpiration i Vaporized Clouds na zmianę, aż Transpiration stanie (max 100), ulepszenia " +
+    "(m.in. bulk boosterów), reszta buyables raz/dwa, potem stop i chmury na 0. 3) Dalej grind. " +
     "4) Finał (postęp znów stoi albo kończy się czas Eclipse): chmury pod Vaporized Eclipse (×ES przy wyjściu) i wyjście. " +
     "Karty punchcard wybiera Casino Killer (profil Eclipse); w finale, gdy jego lista jest pełna, resztę wyborów makro wydaje na karty " +
     "tylko-Eclipse, potem o najniższym poziomie, potem z najmniejszym XP (podbijanie kart spoza listy).",
   params: [
     { key: "single", label: "Boostery pojedynczo: do ilu", type: "number", default: 16, min: 0, step: 1 },
-    { key: "stall", label: "Postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 15, min: 2, step: 1 },
+    { key: "stall", label: "Przed chmurami: postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 5, min: 1, step: 1 },
+    { key: "stall2", label: "Przed finałem: postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 12, min: 1, step: 1 },
+    { key: "grassQuiet", label: "Trawa wymaksowana, gdy nic nie kupiono przez (s)", type: "number", default: 2, min: 0.5, step: 0.5 },
+    { key: "cloudStall", label: "Chmury: Transpiration się zatrzymała, gdy brak zakupu przez (s)", type: "number", default: 3, min: 1, step: 1 },
     { key: "cloudMax", label: "Faza chmur: maks. czas (s)", type: "number", default: 90, min: 5, step: 5 },
     { key: "finalAt", label: "Finał najpóźniej, gdy czasu Eclipse zostało (s)", type: "number", default: 90, min: 0, step: 10 },
-    { key: "finalStall", label: "Finał: wyjdź, gdy Vaporized Eclipse nie rośnie przez (s)", type: "number", default: 20, min: 2, step: 1 },
+    { key: "finalStall", label: "Finał: wyjdź, gdy Vaporized Eclipse nie rośnie przez (s)", type: "number", default: 5, min: 1, step: 1 },
     { key: "exit", label: "Wychodź z Eclipse po finale (inaczej czeka na koniec czasu)", type: "bool", default: true },
     { key: "endCards", label: "Finał: resztę wyborów na karty spoza listy Casino Killera (tylko-Eclipse → najniższy poziom → najmniej XP)", type: "bool", default: true },
   ],
-  available: g => g.layerActive("le") && Boolean(window.layers.le?.clickables?.[13]),
+  available: () => Boolean(window.layers.le?.clickables?.[13] && window.layers.dv?.clickables?.[13]),
   run(ctx) {
     const P = window.player, now = performance.now() / 1000;
     const inEcl = P.sma?.inStarmetalChallenge && P.pet?.legPetTimers?.[0]?.active;
-    if (!inEcl) { ecl.active = false; return ctx.status("poza Eclipse"); }
-    if (!ecl.active) { Object.assign(ecl, { phase: "grind", lastProg: now, phaseStart: now, lastDv15: now, active: true }); }
+    // Chmury przetrwają wyjście z Eclipse, a przyspieszają upływ jego czasu (1,2^log10 chmur) — następny Eclipse
+    // wypaliłby się w kilka sekund. Poza Eclipse i na jego starcie: stop produkcji i chmury na 0.
+    const cloudsLeft = () => P.dv && (P.dv.producingClouds || new window.Decimal(P.dv.clouds).gt(0));
+    if (!inEcl) {
+      ecl.active = false;
+      if (cloudsLeft()) { clk("dv", 12); clk("dv", 13); ctx.did(); ctx.log("Chmury po Eclipse wyzerowane"); }
+      return ctx.status("poza Eclipse");
+    }
+    if (!ecl.active) {
+      if (cloudsLeft()) { clk("dv", 12); clk("dv", 13); }
+      Object.assign(ecl, { phase: "grind", lastProg: now, phaseStart: now, lastDv15: now, lastDv16: now, lastGrass: now, active: true });
+    }
     const did = [];
     const timeLeft = Number(P.pet.legPetTimers[0].current);
     const timerUp = window.getLevelableTier?.("pu", 403, true); // z tą kartą czas rośnie, Eclipse nie kończy się sam
@@ -416,30 +448,41 @@ export const eclipseRun = {
       const bulk = window.hasUpgrade("dv", 13);
       const b0 = Number(P.db.boosters);
       if ((bulk || b0 < ctx.p.single) && clk("db", 11) && Number(P.db.boosters) > b0) { ecl.lastProg = now; did.push(`boostery ${b0}→${Number(P.db.boosters)}`); }
-      if (!grassAutomated()) for (const id of [11, 12, 13, 14, 15, 16]) if (buyMax("dgr", id)) did.push(`grass ${id}`);
-      const stalled = now - ecl.lastProg > ctx.p.stall;
-      if (!timerUp && timeLeft <= ctx.p.finalAt) { ecl.phase = "final"; ecl.phaseStart = ecl.lastDv15 = now; }
+      if (!grassAutomated()) for (const id of [11, 12, 13, 14, 15, 16]) if (buyMax("dgr", id)) { ecl.lastGrass = now; did.push(`grass ${id}`); }
+      // Trawa musi być wymaksowana przed chmurami (Transpiration skaluje się z trawą).
+      const grassDone = grassAutomated() || now - (ecl.lastGrass ?? 0) > ctx.p.grassQuiet;
+      const stallFor = dvUpgradesLeft().length ? ctx.p.stall : ctx.p.stall2; // po chmurach boostery w bulku rosną wolniej
+      const stalled = now - ecl.lastProg > stallFor && grassDone;
+      if (!timerUp && timeLeft <= ctx.p.finalAt) { ecl.phase = "final"; ecl.phaseStart = ecl.lastDv15 = ecl.lastDv16 = now; }
       else if (stalled) {
         ecl.phase = dvUpgradesLeft().length ? "cloud" : "final";
-        ecl.phaseStart = ecl.lastDv15 = now;
+        ecl.phaseStart = ecl.lastDv15 = ecl.lastDv16 = now;
       }
     } else if (ecl.phase === "cloud") {
       if (!P.dv.producingClouds) clk("dv", 11);
-      for (const id of [11, 16, 12, 13, 14, 15]) if (buyMax("dv", id)) did.push(`dv ${id}`);
       for (const id of dvUpgradesLeft()) if (window.canAffordUpgrade("dv", id)) { window.buyUpgrade("dv", id); did.push(`dv upg ${id}`); }
-      if (!dvUpgradesLeft().length || now - ecl.phaseStart > ctx.p.cloudMax) {
+      if (growClouds()) ecl.lastDv16 = now;
+      const n16 = Number(window.getBuyableAmount("dv", 16));
+      const grown = n16 >= 100 || now - (ecl.lastDv16 ?? ecl.phaseStart) > ctx.p.cloudStall;
+      // Transpiration stanęła: kończymy fazę (gdy ulepszeń nie stać — wrócimy po kolejnym resecie, z większą trawą).
+      if (grown || now - ecl.phaseStart > ctx.p.cloudMax) {
+        for (let k = 0; k < 2; k++) for (const id of [12, 13, 14, 15]) buyOne("dv", id); // reszta raz/dwa
         clk("dv", 12); clk("dv", 13); // stop i chmury na 0 (zdejmuje nerf i szybszy upływ czasu)
-        ecl.phase = "grind"; ecl.lastProg = now; did.push("chmury: koniec");
+        ecl.phase = "grind"; ecl.lastProg = now; did.push(`chmury: koniec (Transpiration ${n16})`);
       }
     } else if (ecl.phase === "final") {
-      // Najpierw ostatni reset, jeśli akurat dostępny.
-      if (clk("le", 13)) did.push(`reset LE (${Number(P.le.resetAmount)})`);
+      // Bez resetu LE w finale — wyzerowałby trawę, a Transpiration skaluje się z trawą.
       if (ctx.p.endCards) { const cards = spendLeftoverCards(ctx); if (cards.length) did.push(`karty ${cards.join(", ")}`); }
       if (!P.dv.producingClouds) clk("dv", 11);
-      const n15 = buyMax("dv", 15);
-      if (n15) { ecl.lastDv15 = now; did.push(`Vaporized Eclipse +${n15}`); }
-      for (const id of [11, 16]) buyMax("dv", id);
-      const doneBuying = now - ecl.lastDv15 > ctx.p.finalStall;
+      // Najpierw rozkręcamy chmury (16/11 na zmianę), potem wszystko w Vaporized Eclipse.
+      if (growClouds()) ecl.lastDv16 = now;
+      const n16 = Number(window.getBuyableAmount("dv", 16));
+      const grown = n16 >= 100 || now - (ecl.lastDv16 ?? ecl.phaseStart) > ctx.p.cloudStall;
+      if (grown) {
+        const n15 = buyMax("dv", 15);
+        if (n15) { ecl.lastDv15 = now; did.push(`Vaporized Eclipse +${n15}`); }
+      } else ecl.lastDv15 = now;
+      const doneBuying = grown && now - ecl.lastDv15 > ctx.p.finalStall;
       if (ctx.p.exit && doneBuying && clk("le", 14)) {
         ecl.active = false; ctx.did(); ctx.log("Eclipse: wyjście");
         return ctx.status("wyszedłem z Eclipse");
