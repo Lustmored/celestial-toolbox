@@ -320,3 +320,53 @@ export const punchcardLevelUp = {
     if (ups.length) { window.updateLevelableTemp?.("pu"); ctx.did(ups.length); ctx.log("Level Up: " + ups.join(", ")); }
   },
 };
+
+// Eclipse (SMA z aktywną umiejętnością Eclipse): boostery i Dark Grass, póki gra ich sama nie automatyzuje.
+const grassAutomated = () => window.hasUpgrade("dn", 13) || window.hasMilestone("db", 16) || window.hasMilestone("rar", 14);
+export const eclipseBoosters = {
+  id: "eclipse-boosters",
+  name: "Eclipse: boostery i Dark Grass",
+  group: "Darkness / SMA",
+  every: 0.1,
+  description:
+    "W Dark Universe 1 (domyślnie tylko podczas Eclipse): klika reset Boosterów — pojedynczo do podanego limitu, " +
+    "a gdy masz już bulk (dv 13), za każdym razem, gdy jest dostępny. Kupuje max Dark Grass buyables, dopóki gra " +
+    "ich nie automatyzuje (30 Boosterów + SME-161 ×3, dn 13 albo rar 14).",
+  params: [
+    { key: "single", label: "Boostery pojedynczo: do ilu", type: "number", default: 16, min: 0, step: 1 },
+    { key: "bulk", label: "Z bulkiem: kupuj bez limitu", type: "bool", default: true },
+    { key: "grass", label: "Kupuj Dark Grass buyables (gdy nie są zautomatyzowane)", type: "bool", default: true },
+    { key: "onlyEclipse", label: "Tylko podczas Eclipse", type: "bool", default: true },
+  ],
+  available: g => g.layerActive("db") || g.layerActive("dgr"),
+  run(ctx) {
+    const P = window.player, D = x => new window.Decimal(x);
+    if (!P.sma?.inStarmetalChallenge) return ctx.status("poza SMA");
+    if (ctx.p.onlyEclipse && !P.pet?.legPetTimers?.[0]?.active) return ctx.status("poza Eclipse");
+    const done = [];
+    // Boostery
+    const bulk = window.hasUpgrade("dv", 13);
+    const n = Number(P.db.boosters);
+    const want = bulk ? ctx.p.bulk : n < ctx.p.single;
+    const B = window.layers.db?.clickables?.[11];
+    if (want && B && B.canClick.call(B)) {
+      const before = n;
+      B.onClick.call(B);
+      if (Number(P.db.boosters) > before) { ctx.did(); done.push(`Boostery ${before}→${Number(P.db.boosters)}`); }
+    }
+    // Dark Grass
+    if (ctx.p.grass && !grassAutomated() && window.tmp.dgr?.layerShown !== false) {
+      for (const id of [11, 12, 13, 14, 15, 16]) {
+        const b = window.layers.dgr.buyables[id], t = window.tmp.dgr.buyables?.[id];
+        if (!b || t?.unlocked === false) continue;
+        if (D(window.getBuyableAmount("dgr", id)).gte(b.purchaseLimit())) continue;
+        if (!b.canAfford.call(b)) continue;
+        const before = Number(window.getBuyableAmount("dgr", id));
+        b.buy.call(b, true);
+        const after = Number(window.getBuyableAmount("dgr", id));
+        if (after > before) { ctx.did(); done.push(`grass ${id}+${after - before}`); }
+      }
+    }
+    ctx.status(`boostery ${Number(P.db.boosters)}${bulk ? " (bulk)" : ""}${grassAutomated() ? " · grass auto" : ""}${done.length ? " · " + done.join(", ") : ""}`);
+  },
+};
