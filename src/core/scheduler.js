@@ -1,6 +1,9 @@
 // Uruchamia makra z wnętrza gameLoop gry, każde według własnego interwału.
 import { perfTick } from "./perf.js";
 
+/** Ustawienia wydajności (tweak „Wydajność”): split = maks. liczba kroków logiki na spóźniony tick. */
+export const perfCfg = { split: 1 };
+
 import * as game from "./game.js";
 import { settings, macroSettings, save } from "./settings.js";
 
@@ -116,12 +119,18 @@ export function hookGameLoop(onReady) {
     if (original.__toolbox) return true;
     const wrapped = function (diff) {
       const t0 = performance.now();
-      original.apply(this, arguments);
+      // Spóźniony tick (gra celuje w 50 ms) liczymy w kilku krokach logiki — tak jak przy pełnych 20 tickach/s.
+      const n = perfCfg.split > 1 && diff > 0.075 ? Math.min(perfCfg.split, Math.ceil(diff / 0.05)) : 1;
+      if (n > 1) for (let i = 0; i < n; i++) original.call(this, diff / n);
+      else original.apply(this, arguments);
       const t1 = performance.now();
+      window.__ctbInTick = true;
       try {
         tick();
       } catch (err) {
         console.error("[Toolbox] błąd schedulera:", err);
+      } finally {
+        window.__ctbInTick = false;
       }
       perfTick(t0, t1, performance.now());
     };

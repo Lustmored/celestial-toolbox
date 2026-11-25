@@ -1,4 +1,6 @@
 // Poprawki wyglądu gry (bez wpływu na rozgrywkę).
+import { macroSettings } from "../core/settings.js";
+import { perfCfg } from "../core/scheduler.js";
 
 const BH_SKILL_BUTTONS = ["Skill-Buy-Level", "Skill-Level-Increase", "Skill-Level-Decrease"];
 const ACTIVE = { backgroundColor: "#1f8a3c", border: "3px solid #8af5a8", color: "#ffffff", fontWeight: "bold" };
@@ -294,4 +296,39 @@ export const ritualTwoShards = {
     }, 500);
   },
   onDisable() { clearInterval(ritualClampTimer); ritualClampTimer = null; },
+};
+
+// Wydajność: gra co tick przelicza wszystkie wartości pomocnicze (updateTemp ≈ połowa czasu ticka) i liczy logikę.
+let tempOrig = null;
+export const perfTweak = {
+  id: "tweak-perf",
+  name: "Wydajność: rzadsze przeliczanie i dzielenie ticków",
+  group: "Inne",
+  toggle: true,
+  description:
+    "Gra robi przy słabszej płynności ~10 ticków/s zamiast 20, a część mechanik (np. zysk singularities z resetu) zależy od liczby kroków logiki. " +
+    "Opcje: przeliczanie wartości pomocniczych (updateTemp, ~połowa czasu ticka) tylko co N-ty tick — więcej ticków/s; " +
+    "spóźniony tick liczony w kilku krokach po 50 ms. Czas gry się nie zmienia. W testach: updateTemp co 2. tick ≈ +10% singularities, " +
+    "interfejs może reagować o tick później.",
+  params: [
+    { key: "tempEvery", label: "updateTemp co N-ty tick (1 = jak w grze)", type: "number", default: 2, min: 1, max: 5, step: 1 },
+    { key: "split", label: "Maks. kroków logiki na spóźniony tick (1 = jak w grze; w testach nic nie dało)", type: "number", default: 1, min: 1, max: 4, step: 1 },
+  ],
+  available: () => typeof window.updateTemp === "function",
+  onEnable(ctx) {
+    perfCfg.split = Number(ctx?.p?.split ?? 1);
+    if (tempOrig) return;
+    tempOrig = window.updateTemp;
+    let n = 0;
+    window.updateTemp = function () {
+      const p = macroSettings(perfTweak).params;
+      perfCfg.split = Number(p.split ?? 1);
+      // Wywołania z makr (w trakcie ticku toolboxa) zawsze liczą od razu.
+      if (window.__ctbInTick || (++n % Math.max(1, Number(p.tempEvery ?? 2))) === 0) return tempOrig.apply(this, arguments);
+    };
+  },
+  onDisable() {
+    perfCfg.split = 1;
+    if (tempOrig) { window.updateTemp = tempOrig; tempOrig = null; }
+  },
 };

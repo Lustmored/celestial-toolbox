@@ -18,7 +18,7 @@ import { rocketFuelXp } from "./rocketfuel.js";
 import { bhSkills, skipBulletHell } from "./bhskills.js";
 import { coreFragmentSpend } from "./corefragspend.js";
 import { instantResources, ritualAutoEnter } from "./instant.js";
-import { stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26 } from "./tweaks.js";
+import { stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26, perfTweak } from "./tweaks.js";
 
 export default [
   cbClaimAll, goldenCookies, dotKnight, fragmentation, singularityPets, petShop, fragmentShop,
@@ -31,5 +31,5 @@ export default [
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding, nestFarm, rocketFuelXp,
   numbnessLoop,
   coinFlipper, cardsHelper, zarBlackjack, stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26,
-  bhSkillButtons, labAutoEnter, bhSkills, skipBulletHell, coreFragmentSpend,
+  bhSkillButtons, labAutoEnter, bhSkills, skipBulletHell, coreFragmentSpend, perfTweak,
 ];
