@@ -347,6 +347,39 @@ const dvUpgradesLeft = () => [11, 12, 13, 14].filter(id => {
   return u && window.run(u.unlocked, u) && !window.hasUpgrade("dv", id);
 });
 
+// Karty dostępne tylko w Eclipse: canSelect wymaga aktywnej umiejętności Eclipse (bez negacji).
+const ECL_ONLY = /(^|[^!])player\.pet\.legPetTimers\[0\]\.active/;
+const eclOnly = id => { try { return ECL_ONLY.test(String(window.layers.pu.levelables[id].canSelect)); } catch { return false; } };
+/** Pod koniec Eclipse: resztę wyborów na karty spoza listy Casino Killera — najpierw tylko-Eclipse, potem najniższy poziom, potem najmniej XP. */
+function spendLeftoverCards(ctx) {
+  const P = window.player, pu = P.pu;
+  if (!pu || pu.storedSelections.lt(1)) return [];
+  const ck = settings().macros?.["casino-killer"];
+  if (ck?.enabled) {
+    const key = ck.params?.eclProfile === "gj" ? "gj" : "eclipse";
+    const missing = ctx.parseIds(ck.params?.[key] ?? "").filter(id => id < 400 && pu.levelables[id] && !hasCard(id)
+      && window.run(window.layers.pu.levelables[id].canSelect, window.layers.pu.levelables[id]));
+    if (missing.length) return []; // najpierw lista Casino Killera
+  }
+  const out = [];
+  for (let guard = 0; guard < 30 && pu.storedSelections.gte(1); guard++) {
+    const cands = Object.keys(pu.levelables).map(Number).filter(id => id >= 100 && id < 400 && !hasCard(id) && (() => {
+      const c = window.layers.pu.levelables[id]; try { return c && window.run(c.canSelect, c); } catch { return false; } })());
+    if (!cands.length) break;
+    const key = id => [eclOnly(id) ? 0 : 1, Number(window.getLevelableAmount("pu", id)), Number(window.getLevelableXP("pu", id))];
+    cands.sort((a, b) => { const x = key(a), y = key(b); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; });
+    const id = cands[0];
+    const prev = { card: pu.selectedPunchcards[0], index: pu.selectionIndex, cost: pu.selectionCost };
+    pu.selectedPunchcards[0] = id; pu.selectionIndex = 0; pu.selectionCost = new window.Decimal(1);
+    if (!ctx.click("pu", 10, { refresh: true }) || !hasCard(id)) {
+      pu.selectedPunchcards[0] = prev.card; pu.selectionIndex = prev.index; pu.selectionCost = prev.cost;
+      break;
+    }
+    out.push(id);
+  }
+  return out;
+}
+
 export const eclipseRun = {
   id: "eclipse-run",
   name: "Eclipse: autopilot biegu",
@@ -357,7 +390,8 @@ export const eclipseRun = {
     "z bulkiem bez limitu); Dark Grass buyables, dopóki gra ich nie automatyzuje. 2) Gdy postęp stanie, a brakuje ulepszeń Vaporizera: " +
     "produkcja chmur, kupno buyables i ulepszeń (m.in. bulk boosterów), potem stop i chmury na 0. 3) Dalej grind. " +
     "4) Finał (postęp znów stoi albo kończy się czas Eclipse): chmury pod Vaporized Eclipse (×ES przy wyjściu) i wyjście. " +
-    "Karty punchcard wybiera Casino Killer (profil Eclipse).",
+    "Karty punchcard wybiera Casino Killer (profil Eclipse); w finale, gdy jego lista jest pełna, resztę wyborów makro wydaje na karty " +
+    "tylko-Eclipse, potem o najniższym poziomie, potem z najmniejszym XP (podbijanie kart spoza listy).",
   params: [
     { key: "single", label: "Boostery pojedynczo: do ilu", type: "number", default: 16, min: 0, step: 1 },
     { key: "stall", label: "Postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 15, min: 2, step: 1 },
@@ -365,6 +399,7 @@ export const eclipseRun = {
     { key: "finalAt", label: "Finał najpóźniej, gdy czasu Eclipse zostało (s)", type: "number", default: 90, min: 0, step: 10 },
     { key: "finalStall", label: "Finał: wyjdź, gdy Vaporized Eclipse nie rośnie przez (s)", type: "number", default: 20, min: 2, step: 1 },
     { key: "exit", label: "Wychodź z Eclipse po finale (inaczej czeka na koniec czasu)", type: "bool", default: true },
+    { key: "endCards", label: "Finał: resztę wyborów na karty spoza listy Casino Killera (tylko-Eclipse → najniższy poziom → najmniej XP)", type: "bool", default: true },
   ],
   available: g => g.layerActive("le") && Boolean(window.layers.le?.clickables?.[13]),
   run(ctx) {
@@ -399,6 +434,7 @@ export const eclipseRun = {
     } else if (ecl.phase === "final") {
       // Najpierw ostatni reset, jeśli akurat dostępny.
       if (clk("le", 13)) did.push(`reset LE (${Number(P.le.resetAmount)})`);
+      if (ctx.p.endCards) { const cards = spendLeftoverCards(ctx); if (cards.length) did.push(`karty ${cards.join(", ")}`); }
       if (!P.dv.producingClouds) clk("dv", 11);
       const n15 = buyMax("dv", 15);
       if (n15) { ecl.lastDv15 = now; did.push(`Vaporized Eclipse +${n15}`); }
