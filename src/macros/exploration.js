@@ -29,7 +29,7 @@ function neighbours(se, D) {
 export const starExplore = {
   id: "star-explore",
   name: "Space Exploration: auto-podróże",
-  group: "Iridite",
+  group: "A2 / Alt Universe 2",
   every: 2,
   description:
     "Gdy statek dotrze do gwiazdy, od razu wysyła go dalej. Cel: gwiazda z listy priorytetów (pierwsza poniżej 100 wizyt), " +

@@ -4,7 +4,7 @@ import { spendWhenFull } from "./lib/spendWhenFull.js";
 export const spaceDust = {
   id: "space-dust",
   name: "Space Dust",
-  group: "Alt U2 / Space",
+  group: "A2 / Alt Universe 2",
   every: 4,
   description:
     "Gdy Space Dust jest pełny: kupuje ID z listy „najpierw” (domyślnie nic), potem pozostałe buyables tańsze " +

@@ -331,7 +331,7 @@ const applyParams = p => {
 export const shipHunter = {
   id: "ship-hunter",
   name: "Walka statkami: bot (polowanie + uniki)",
-  group: "Iridite",
+  group: "A2 / Alt Universe 2",
   toggle: true,
   description:
     "Podczas walki statkiem sam steruje WASD: wybiera najbliższego/najsłabszego wroga, ustawia się przodem do niego " +

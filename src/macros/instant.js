@@ -9,7 +9,7 @@ const mem = { pending: null, prevRef: null };
 export const instantResources = {
   id: "instant-resources",
   name: "Space Battle: instant resources z zapisanych slotów",
-  group: "Iridite",
+  group: "A2 / Alt Universe 2",
   every: 2,
   description:
     "Poza walką klika „instant resources” dla gotowych slotów z listy (np. Space Junk, Evolution Shards), wybierając na chwilę " +
@@ -101,5 +101,81 @@ export const ritualAutoEnter = {
     if (P.tab !== "cbs") window.showTab ? window.showTab("cbs") : (P.tab = "cbs");
     window.clickClickable("cbs", "enter");
     if (P.ir?.inBattle || cbs.inBattle || liveArena()) { ctx.log(`Ritual: start (−${window.formatWhole(evo)} Evo, −${window.formatWhole(ps)} PS)`); ctx.did(); ctx.status("walka z duchem"); }
+  },
+};
+
+// Iridite: farma Space Gems — wejście do strefy kosmicznej od wybranego poziomu co cooldown statku.
+// Walkę prowadzi „Walka statkami: bot”. Gra sama wychodzi po przekroczeniu limitu strefy (100); po zniszczeniu statku
+// zostaje ekran „You lost.” — wtedy klikamy „Leave Battle”, żeby ruszył cooldown.
+const ZONES = [["spaceZone1", "Zone I"], ["spaceZone2", "Zone II"], ["spaceZone3", "Zone III"], ["spaceZone4", "Zone IV"]];
+const zoneMem = { prevTab: null, lvl: 0, t0: 0, gem0: null };
+
+export const spaceZoneFarm = {
+  id: "space-zone-farm",
+  name: "Strefa kosmiczna: farma Space Gems (wejście co cooldown)",
+  group: "A2 / Alt Universe 2",
+  every: 1,
+  description:
+    "Gdy statek jest gotowy, ustawia poziom startowy, wchodzi do strefy (domyślnie Zone III od 0) i czeka do końca biegu: " +
+    "gra sama wychodzi po poziomie 100, a po zniszczeniu statku makro klika „Leave Battle”. Potem przywraca poprzednią zakładkę. " +
+    "Wymaga włączonego makra „Walka statkami: bot”. Nie wchodzi, gdy zaraz będzie gotowy Ritual (pierwszeństwo, bo dzieli cooldown statku).",
+  params: [
+    { key: "zone", label: "Strefa", type: "select", default: "spaceZone3", options: ZONES },
+    { key: "start", label: "Poziom startowy (0/20/40/60/80)", type: "number", default: 0, min: 0, max: 80, step: 20 },
+    { key: "exitAt", label: "Wyjdź po ukończeniu poziomu (100 = do końca strefy)", type: "number", default: 100, min: 1, max: 100, step: 1 },
+    { key: "ritualMin", label: "Nie wchodź, gdy Ritual będzie gotowy w ciągu (min, 0 = ignoruj)", type: "number", default: 15, min: 0, step: 5 },
+  ],
+  available: () => Boolean(window.player?.ir && window.layers.spaceZone3?.clickables?.enter),
+  run(ctx) {
+    const P = window.player, ir = P.ir, D = x => new window.Decimal(x);
+    const zone = ctx.p.zone || "spaceZone3", Z = window.layers[zone];
+    if (!Z?.clickables?.enter) return ctx.status("strefa niedostępna");
+    const gemNow = () => D(ir.spaceGem);
+    const finish = why => {
+      const got = zoneMem.gem0 ? gemNow().sub(zoneMem.gem0) : null;
+      const mins = zoneMem.t0 ? ((Date.now() - zoneMem.t0) / 60000).toFixed(1) : "?";
+      ctx.log(`${why} (poziom ${zoneMem.lvl}, ${mins} min${got ? `, +${window.formatWhole(got.max(0))} Space Gems` : ""})`);
+      zoneMem.gem0 = null; zoneMem.t0 = 0; ctx.did();
+    };
+
+    if (ir.inBattle) {
+      if (ir.battleStage !== zone) return ctx.status("trwa inna walka");
+      const a = liveArena();
+      if (!a) {
+        // Statek zniszczony: gra zostawia ekran „You lost.” i nie odpala cooldownu, dopóki nie wyjdziemy.
+        if (P.tab !== "ir") P.tab = "ir";
+        window.clickClickable("ir", 12);
+        finish("Statek zniszczony");
+        return;
+      }
+      const lvl = Number(ir.battleLevel);
+      zoneMem.lvl = Math.max(zoneMem.lvl, lvl);
+      if (ctx.p.exitAt < 100 && lvl > ctx.p.exitAt && ir.menu == 0) { window.clickClickable("ir", 12); finish("Wyjście"); return; }
+      return ctx.status(`walka: poziom ${lvl}`);
+    }
+    if (zoneMem.gem0) finish("Koniec biegu");
+    if (zoneMem.prevTab) { if (P.tab === "ir") window.showTab ? window.showTab(zoneMem.prevTab) : (P.tab = zoneMem.prevTab); zoneMem.prevTab = null; }
+
+    if (!settings().macros?.["ship-hunter"]?.enabled) return ctx.status("włącz „Walka statkami: bot”");
+    if (ir.selectingShip) return ctx.status("wybór statku — czekam");
+    if (mem.pending != null) return ctx.status("czekam na makro instant resources");
+    const cbs = P.cbs, rit = settings().macros?.["ritual-auto-enter"];
+    if (rit?.enabled && ctx.p.ritualMin > 0 && cbs && D(cbs.ritualSpiritCooldown).lte(ctx.p.ritualMin * 60))
+      return ctx.status(`Ritual za ${window.formatTime(D(cbs.ritualSpiritCooldown).max(0))} — ma pierwszeństwo`);
+    if (!Z.clickables.enter.canClick()) {
+      const sc = ir.shipBattleSaveCurrent;
+      if (!sc) return ctx.status("brak wybranego statku");
+      let t = D(ir.timers[sc.shipType].current); if (sc.slot >= 0) t = t.max(ir.saveTimers[sc.slot].current);
+      return ctx.status(`statek się chłodzi: ${window.formatTime(t.max(0))}`);
+    }
+    // Poziom startowy: tylko odblokowany punkt zapisu (0/20/40/60/80).
+    const start = Math.max(0, Math.min(80, Math.floor(ctx.p.start / 20) * 20));
+    P[zone].selectedStageStart = D(D(P[zone].highestLevel).gte(start) ? start : 0);
+    // Gra pauzuje A2 i pokazuje walkę tylko z otwartej zakładki Iridite.
+    if (P.tab !== "ir") { zoneMem.prevTab = P.tab; window.showTab ? window.showTab("ir") : (P.tab = "ir"); }
+    zoneMem.gem0 = gemNow(); zoneMem.t0 = Date.now(); zoneMem.lvl = 0;
+    window.clickClickable(zone, "enter");
+    if (ir.inBattle) { ctx.did(); ctx.status(`start: ${ZONES.find(z => z[0] === zone)?.[1]} od ${Number(P[zone].selectedStageStart)}`); }
+    else { zoneMem.gem0 = null; ctx.status("nie udało się wejść"); }
   },
 };

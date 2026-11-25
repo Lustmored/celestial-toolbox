@@ -17,7 +17,7 @@ import { coinFlipper, cardsHelper, zarBlackjack } from "./zar.js";
 import { rocketFuelXp } from "./rocketfuel.js";
 import { bhSkills, skipBulletHell } from "./bhskills.js";
 import { coreFragmentSpend } from "./corefragspend.js";
-import { instantResources, ritualAutoEnter } from "./instant.js";
+import { instantResources, ritualAutoEnter, spaceZoneFarm } from "./instant.js";
 import { stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26, perfTweak, perfBar } from "./tweaks.js";
 
 export default [
@@ -25,9 +25,8 @@ export default [
   moonstone,
   hexVexes, dreamRealm,
   casinoKiller, punchcardLevelUp, smaAutoEnter, hiveUnpause, spaceLoop, eclipseRun, coreFragmentFarm,
-  spaceDust,
-  rocketPassengers,
-  shipHunter, starExplore, instantResources, ritualAutoEnter,
+  spaceDust, starExplore, shipHunter, spaceZoneFarm, instantResources,
+  rocketPassengers, ritualAutoEnter,
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding, nestFarm, rocketFuelXp,
   numbnessLoop,
   coinFlipper, cardsHelper, zarBlackjack, stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26,
