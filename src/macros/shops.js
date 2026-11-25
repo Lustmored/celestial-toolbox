@@ -31,6 +31,12 @@ const tabVisible = (group, name) => {
   return Boolean(t) && (t.unlocked === undefined || Boolean(run(t.unlocked, t)));
 };
 const clickVisible = id => Boolean(id && window.tmp.pet.clickables[id]?.unlocked);
+/** Czy przycisk jest faktycznie umieszczony w układzie zakładki sklepu (gra ma też ukryte przyciski, np. 308/309). */
+function inShopLayout(tab, id) {
+  const content = window.layers.pet?.microtabs?.shopTabs?.[tab]?.content;
+  const walk = x => Array.isArray(x) && ((x[0] === "clickable" && Number(x[1]) === Number(id)) || x.some(walk));
+  try { return walk(typeof content === "function" ? content() : content); } catch { return false; }
+}
 
 /** XP brakujące do następnego poziomu (ujemne = nadwyżka), null gdy pet jest na limicie poziomu. */
 function shortfall(pid) {
@@ -129,7 +135,8 @@ export const petShop = {
     "gdy jedna strona nie ma nic do kupienia, druga wydaje dalej.",
   params: [
     { key: "order", label: "Kolejność grup petów", type: "text", default: "rare uncommon common" },
-    { key: "focus", label: "Priorytetowe pety (np. 308): kupowane pierwsze, w największym bulku, na jaki stać (do limitu poziomu)", type: "text", default: "" },
+    { key: "hidden", label: "Kupuj też pety z przycisków poza układem sklepu (308/309 — prawdopodobnie błąd interfejsu gry)", type: "bool", default: false },
+    { key: "focus", label: "Priorytetowe pety (np. 303): kupowane pierwsze, w największym bulku, na jaki stać", type: "text", default: "" },
     { key: "focusPct", label: "Priorytetowe: maks. % PP na jeden zakup", type: "number", default: 100, min: 1, max: 100, step: 5 },
     { key: "beShare", label: "Button Enhancement: docelowy % wydatków (0 = nie kupuj)", type: "number", default: 25, min: 0, max: 100, step: 5 },
     { key: "beEsc", label: "Button Enhancement: kupuj też ESC w ramach udziału", type: "bool", default: true },
@@ -192,7 +199,7 @@ export const petShop = {
         for (let j = 0; j < 9; j++) {
           const idx = g.first + j;
           const item = p.shop[name]?.[j];
-          if (!item || !clickVisible(shopSel[idx]) || item.current.gte(0)) continue;
+          if (!item || !clickVisible(shopSel[idx]) || (!ctx.p.hidden && !inShopLayout(g.tab, shopSel[idx])) || item.current.gte(0)) continue;
           const short = shortfall(idx);
           if (short === null) continue;
           const buffer = ctx.p.fragBuffer ? fragmentationBuffer(idx) : 0;
