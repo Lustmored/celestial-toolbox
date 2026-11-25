@@ -415,7 +415,10 @@ export const eclipseRun = {
     { key: "single", label: "Boostery pojedynczo: do ilu", type: "number", default: 16, min: 0, step: 1 },
     { key: "stall", label: "Przed chmurami: postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 5, min: 1, step: 1 },
     { key: "stall2", label: "Przed finałem: postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 12, min: 1, step: 1 },
-    { key: "grassQuiet", label: "Trawa wymaksowana, gdy nic nie kupiono przez (s)", type: "number", default: 2, min: 0.5, step: 0.5 },
+    { key: "grassTarget", label: "Trawa wystarczy do chmur od (Dark Grass, np. 1e130)", type: "text", default: "1e130" },
+    { key: "grassQuiet", label: "…albo gdy nic z trawy nie kupiono przez (s)", type: "number", default: 4, min: 0.5, step: 0.5 },
+    { key: "bulkMin", label: "Bulk boosterów: kupuj paczkę od (szt.)", type: "number", default: 20, min: 1, step: 1 },
+    { key: "bulkWait", label: "Bulk boosterów: najdłużej czekaj na paczkę (s)", type: "number", default: 3, min: 0, step: 0.5 },
     { key: "cloudStall", label: "Chmury: Transpiration się zatrzymała, gdy brak zakupu przez (s)", type: "number", default: 3, min: 1, step: 1 },
     { key: "cloudMax", label: "Faza chmur: maks. czas (s)", type: "number", default: 90, min: 5, step: 5 },
     { key: "finalAt", label: "Finał najpóźniej, gdy czasu Eclipse zostało (s)", type: "number", default: 90, min: 0, step: 10 },
@@ -447,12 +450,19 @@ export const eclipseRun = {
       if (clk("le", 13)) { ecl.lastProg = now; did.push(`reset LE (${Number(P.le.resetAmount)})`); }
       const bulk = window.hasUpgrade("dv", 13);
       const b0 = Number(P.db.boosters);
-      if ((bulk || b0 < ctx.p.single) && clk("db", 11) && Number(P.db.boosters) > b0) { ecl.lastProg = now; did.push(`boostery ${b0}→${Number(P.db.boosters)}`); }
+      // Z bulkiem: większe paczki (każdy reset boosterów zeruje generatory), ale nie dłużej niż bulkWait.
+      const bulkReady = Number(P.db.boosterBulk) >= ctx.p.bulkMin || now - (ecl.lastBoost ?? 0) >= ctx.p.bulkWait;
+      if ((bulk ? bulkReady : b0 < ctx.p.single) && clk("db", 11) && Number(P.db.boosters) > b0) {
+        ecl.lastProg = ecl.lastBoost = now; did.push(`boostery ${b0}→${Number(P.db.boosters)}`);
+      }
       if (!grassAutomated()) for (const id of [11, 12, 13, 14, 15, 16]) if (buyMax("dgr", id)) { ecl.lastGrass = now; did.push(`grass ${id}`); }
       // Trawa musi być wymaksowana przed chmurami (Transpiration skaluje się z trawą).
-      const grassDone = grassAutomated() || now - (ecl.lastGrass ?? 0) > ctx.p.grassQuiet;
-      const stallFor = dvUpgradesLeft().length ? ctx.p.stall : ctx.p.stall2; // po chmurach boostery w bulku rosną wolniej
-      const stalled = now - ecl.lastProg > stallFor && grassDone;
+      const grassDone = grassAutomated() || new window.Decimal(P.dgr.grass).gte(ctx.p.grassTarget) || now - (ecl.lastGrass ?? 0) > ctx.p.grassQuiet;
+      const upgLeft = dvUpgradesLeft().length > 0;
+      const stallFor = upgLeft ? ctx.p.stall : ctx.p.stall2; // po chmurach boostery w bulku rosną wolniej
+      // Pierwsze chmury: od razu, gdy trawy wystarczy i nie czeka reset LE.
+      const cloudNow = upgLeft && grassDone && new window.Decimal(P.dgr.grass).gte(ctx.p.grassTarget) && !window.run(window.layers.le.clickables[13].canClick, window.layers.le.clickables[13]);
+      const stalled = cloudNow || (now - ecl.lastProg > stallFor && grassDone);
       if (!timerUp && timeLeft <= ctx.p.finalAt) { ecl.phase = "final"; ecl.phaseStart = ecl.lastDv15 = ecl.lastDv16 = now; }
       else if (stalled) {
         ecl.phase = dvUpgradesLeft().length ? "cloud" : "final";
