@@ -45,6 +45,9 @@ function nextLevelNeed(pid) {
   return s === null ? null : Math.max(0, s);
 }
 
+// Nadmiar XP ponad limit poziomu zostaje na pecie (przechodzi na następny tier po awansie), więc nie ograniczamy bulku.
+const xpToLimit = () => null;
+
 function levelUp(pid) {
   window.updateLevelableTemp("pet");
   if (!window.tmp.pet.levelables[pid]?.canBuy) return false;
@@ -126,6 +129,8 @@ export const petShop = {
     "gdy jedna strona nie ma nic do kupienia, druga wydaje dalej.",
   params: [
     { key: "order", label: "Kolejność grup petów", type: "text", default: "rare uncommon common" },
+    { key: "focus", label: "Priorytetowe pety (np. 308): kupowane pierwsze, w największym bulku, na jaki stać (do limitu poziomu)", type: "text", default: "" },
+    { key: "focusPct", label: "Priorytetowe: maks. % PP na jeden zakup", type: "number", default: 100, min: 1, max: 100, step: 5 },
     { key: "beShare", label: "Button Enhancement: docelowy % wydatków (0 = nie kupuj)", type: "number", default: 25, min: 0, max: 100, step: 5 },
     { key: "beEsc", label: "Button Enhancement: kupuj też ESC w ramach udziału", type: "bool", default: true },
     { key: "escPct", label: "ESC (szansa na Evo Shardy) poza kolejką: kupuj najtańszy poziom, gdy kosztuje ≤ % PP (0 = wyłącz)", type: "number", default: 25, min: 0, max: 100, step: 5 },
@@ -179,6 +184,7 @@ export const petShop = {
 
       // --- 2. Kandydaci: pety ---
       const petQueue = [];
+      const focus = new Set(ctx.parseIds(ctx.p.focus));
       for (const name of String(ctx.p.order).split(/\s+/).filter(Boolean)) {
         const g = GROUPS[name];
         if (!g || !tabVisible("shopTabs", g.tab)) continue;
@@ -190,12 +196,21 @@ export const petShop = {
           const short = shortfall(idx);
           if (short === null) continue;
           const buffer = ctx.p.fragBuffer ? fragmentationBuffer(idx) : 0;
-          const need = Math.max(0, short + buffer);
-          cands.push({ idx, need, cost: need ? petCost(shopBase(name, j), need) : 0 });
+          let need = Math.max(0, short + buffer);
+          const base = shopBase(name, j);
+          if (focus.has(idx) && need > 0) {
+            // Największy bulk w budżecie: base·(0,05b + 0,95)·b ≤ budżet.
+            const budget = Math.max(0, Math.min(pp() - reserve, pp() * ctx.p.focusPct / 100));
+            const max = Math.floor((-0.95 + Math.sqrt(0.9025 + 0.2 * budget / base)) / 0.1);
+            const toLimit = xpToLimit(idx);
+            need = Math.max(1, Math.min(max, toLimit ?? max));
+          }
+          cands.push({ idx, need, cost: need ? petCost(base, need) : 0, focus: focus.has(idx) });
         }
-        cands.sort((a, b) => a.cost - b.cost);
+        cands.sort((a, b) => (b.focus - a.focus) || a.cost - b.cost);
         petQueue.push(...cands);
       }
+      petQueue.sort((a, b) => (b.focus - a.focus));
       // Darmowe awanse (XP już jest) od razu.
       for (const c of petQueue.filter(c => c.need === 0)) if (levelUp(c.idx)) { ctx.did(); bought.push(`${c.idx}↑`); }
       const pets = petQueue.filter(c => c.need > 0);
@@ -236,7 +251,7 @@ export const petShop = {
 
       // --- 3. Naprzemiennie wg udziału w wydatkach ---
       for (let guard = 0; guard < 200; guard++) {
-        const pet0 = pets.find(c => ok(c.cost));
+        const pet0 = pets.find(c => c.focus ? c.cost <= pp() - reserve : ok(c.cost));
         const be0 = nextBe();
         const beOk = be0 && ok(be0.cost);
         if (!pet0 && !beOk) break;
