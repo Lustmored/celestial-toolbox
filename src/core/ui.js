@@ -4,6 +4,7 @@
 import { macros, info, setEnabled, runOnce } from "./scheduler.js";
 import { cloudSave, cloudFetch } from "./galaxy.js";
 import { settings, macroSettings, save, exportSettings, importSettings } from "./settings.js";
+import { startPerf, onPerf } from "./perf.js";
 
 const WIDTH = 300;
 const STRIP = 26;
@@ -26,6 +27,9 @@ const CSS = `
 .root.collapsed .body, .root.collapsed .head .title, .root.collapsed .head .pause, .root.collapsed .foot { display: none; }
 .root.collapsed .head { flex-direction: column; padding: 6px 0; }
 .head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #2c2e3a; }
+.perf { font: 11px monospace; color: #888a99; padding: 2px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.perf.bad { color: #ff7a7a; }
+.root.collapsed .perf { display: none; }
 .title { font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title small { color: #888a99; font-weight: 400; }
 button { font: inherit; color: inherit; background: #262836; border: 1px solid #3a3c4a; border-radius: 4px;
@@ -179,10 +183,18 @@ export function mountUI(version) {
     rows.push(row);
   }
 
+  const perfEl = h("div", { class: "perf", title: "FPS: klatki przeglądarki/s · TPS: ticki gry/s (gra celuje w 20) · max: najdłuższa przerwa między tickami (5 s) · gra/toolbox: % czasu CPU w ticku" }, "…");
+  startPerf();
+  onPerf(p => {
+    const bad = p.tps < 18 || p.maxGap > 200;
+    perfEl.classList.toggle("bad", bad);
+    perfEl.textContent = `${Math.round(p.fps)} FPS · ${p.tps.toFixed(1)} TPS · max ${Math.round(p.maxGap)} ms · gra ${p.gamePct.toFixed(0)}% · toolbox ${p.tbPct.toFixed(1)}%${p.hidden ? " · karta w tle" : ""}`;
+  });
   root.append(
     h("div", { class: "head" },
       h("div", { class: "title" }, "Celestial Toolbox ", h("small", {}, "v" + version)),
       pauseBtn, collapseBtn),
+    perfEl,
     h("div", { class: "body" },
       [...groups].map(([name, els]) => {
         const d = h("details", { class: "group", open: "" }, h("summary", {}, name), els);

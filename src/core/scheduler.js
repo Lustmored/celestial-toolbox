@@ -1,4 +1,5 @@
 // Uruchamia makra z wnętrza gameLoop gry, każde według własnego interwału.
+import { perfTick } from "./perf.js";
 
 import * as game from "./game.js";
 import { settings, macroSettings, save } from "./settings.js";
@@ -114,12 +115,15 @@ export function hookGameLoop(onReady) {
     const original = window.gameLoop;
     if (original.__toolbox) return true;
     const wrapped = function (diff) {
+      const t0 = performance.now();
       original.apply(this, arguments);
+      const t1 = performance.now();
       try {
         tick();
       } catch (err) {
         console.error("[Toolbox] błąd schedulera:", err);
       }
+      perfTick(t0, t1, performance.now());
     };
     wrapped.__toolbox = true;
     wrapped.__original = original;
