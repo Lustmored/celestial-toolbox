@@ -321,52 +321,96 @@ export const punchcardLevelUp = {
   },
 };
 
-// Eclipse (SMA z aktywną umiejętnością Eclipse): boostery i Dark Grass, póki gra ich sama nie automatyzuje.
+// Eclipse: autopilot całego biegu (Dark Universe 1 z aktywną umiejętnością Eclipse).
+// Fazy: grind (resety LE + boostery + Dark Grass) → chmury (kupno ulepszeń Vaporizera, m.in. bulk boosterów)
+// → grind → finał (chmury pod Vaporized Eclipse = ×ES przy wyjściu) → wyjście.
 const grassAutomated = () => window.hasUpgrade("dn", 13) || window.hasMilestone("db", 16) || window.hasMilestone("rar", 14);
-export const eclipseBoosters = {
-  id: "eclipse-boosters",
-  name: "Eclipse: boostery i Dark Grass",
+const ecl = { phase: "grind", lastProg: 0, phaseStart: 0, lastDv15: 0, active: false };
+const clk = (layer, id) => {
+  const C = window.layers[layer]?.clickables?.[id];
+  if (!C) return false;
+  try { if (C.unlocked && !window.run(C.unlocked, C)) return false; if (!window.run(C.canClick, C)) return false; } catch { return false; }
+  C.onClick.call(C);
+  return true;
+};
+const buyMax = (layer, id) => {
+  const b = window.layers[layer]?.buyables?.[id];
+  if (!b) return 0;
+  const before = Number(window.getBuyableAmount(layer, id));
+  if (new window.Decimal(before).gte(b.purchaseLimit())) return 0;
+  if (!b.canAfford.call(b)) return 0;
+  b.buy.call(b, true);
+  return Number(window.getBuyableAmount(layer, id)) - before;
+};
+const dvUpgradesLeft = () => [11, 12, 13, 14].filter(id => {
+  const u = window.layers.dv?.upgrades?.[id];
+  return u && window.run(u.unlocked, u) && !window.hasUpgrade("dv", id);
+});
+
+export const eclipseRun = {
+  id: "eclipse-run",
+  name: "Eclipse: autopilot biegu",
   group: "Darkness / SMA",
   every: 0.1,
   description:
-    "W Dark Universe 1 (domyślnie tylko podczas Eclipse): klika reset Boosterów — pojedynczo do podanego limitu, " +
-    "a gdy masz już bulk (dv 13), za każdym razem, gdy jest dostępny. Kupuje max Dark Grass buyables, dopóki gra " +
-    "ich nie automatyzuje (30 Boosterów + SME-161 ×3, dn 13 albo rar 14).",
+    "Prowadzi cały bieg Eclipse. 1) Grind: reset Light Extractora (Eclipse Shards), gdy tylko się da; boostery (pojedynczo do limitu, " +
+    "z bulkiem bez limitu); Dark Grass buyables, dopóki gra ich nie automatyzuje. 2) Gdy postęp stanie, a brakuje ulepszeń Vaporizera: " +
+    "produkcja chmur, kupno buyables i ulepszeń (m.in. bulk boosterów), potem stop i chmury na 0. 3) Dalej grind. " +
+    "4) Finał (postęp znów stoi albo kończy się czas Eclipse): chmury pod Vaporized Eclipse (×ES przy wyjściu) i wyjście. " +
+    "Karty punchcard wybiera Casino Killer (profil Eclipse).",
   params: [
     { key: "single", label: "Boostery pojedynczo: do ilu", type: "number", default: 16, min: 0, step: 1 },
-    { key: "bulk", label: "Z bulkiem: kupuj bez limitu", type: "bool", default: true },
-    { key: "grass", label: "Kupuj Dark Grass buyables (gdy nie są zautomatyzowane)", type: "bool", default: true },
-    { key: "onlyEclipse", label: "Tylko podczas Eclipse", type: "bool", default: true },
+    { key: "stall", label: "Postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 15, min: 2, step: 1 },
+    { key: "cloudMax", label: "Faza chmur: maks. czas (s)", type: "number", default: 90, min: 5, step: 5 },
+    { key: "finalAt", label: "Finał najpóźniej, gdy czasu Eclipse zostało (s)", type: "number", default: 90, min: 0, step: 10 },
+    { key: "finalStall", label: "Finał: wyjdź, gdy Vaporized Eclipse nie rośnie przez (s)", type: "number", default: 20, min: 2, step: 1 },
+    { key: "exit", label: "Wychodź z Eclipse po finale (inaczej czeka na koniec czasu)", type: "bool", default: true },
   ],
-  available: g => g.layerActive("db") || g.layerActive("dgr"),
+  available: g => g.layerActive("le") && Boolean(window.layers.le?.clickables?.[13]),
   run(ctx) {
-    const P = window.player, D = x => new window.Decimal(x);
-    if (!P.sma?.inStarmetalChallenge) return ctx.status("poza SMA");
-    if (ctx.p.onlyEclipse && !P.pet?.legPetTimers?.[0]?.active) return ctx.status("poza Eclipse");
-    const done = [];
-    // Boostery
-    const bulk = window.hasUpgrade("dv", 13);
-    const n = Number(P.db.boosters);
-    const want = bulk ? ctx.p.bulk : n < ctx.p.single;
-    const B = window.layers.db?.clickables?.[11];
-    if (want && B && B.canClick.call(B)) {
-      const before = n;
-      B.onClick.call(B);
-      if (Number(P.db.boosters) > before) { ctx.did(); done.push(`Boostery ${before}→${Number(P.db.boosters)}`); }
-    }
-    // Dark Grass
-    if (ctx.p.grass && !grassAutomated() && window.tmp.dgr?.layerShown !== false) {
-      for (const id of [11, 12, 13, 14, 15, 16]) {
-        const b = window.layers.dgr.buyables[id], t = window.tmp.dgr.buyables?.[id];
-        if (!b || t?.unlocked === false) continue;
-        if (D(window.getBuyableAmount("dgr", id)).gte(b.purchaseLimit())) continue;
-        if (!b.canAfford.call(b)) continue;
-        const before = Number(window.getBuyableAmount("dgr", id));
-        b.buy.call(b, true);
-        const after = Number(window.getBuyableAmount("dgr", id));
-        if (after > before) { ctx.did(); done.push(`grass ${id}+${after - before}`); }
+    const P = window.player, now = performance.now() / 1000;
+    const inEcl = P.sma?.inStarmetalChallenge && P.pet?.legPetTimers?.[0]?.active;
+    if (!inEcl) { ecl.active = false; return ctx.status("poza Eclipse"); }
+    if (!ecl.active) { Object.assign(ecl, { phase: "grind", lastProg: now, phaseStart: now, lastDv15: now, active: true }); }
+    const did = [];
+    const timeLeft = Number(P.pet.legPetTimers[0].current);
+    const timerUp = window.getLevelableTier?.("pu", 403, true); // z tą kartą czas rośnie, Eclipse nie kończy się sam
+
+    if (ecl.phase === "grind") {
+      if (clk("le", 13)) { ecl.lastProg = now; did.push(`reset LE (${Number(P.le.resetAmount)})`); }
+      const bulk = window.hasUpgrade("dv", 13);
+      const b0 = Number(P.db.boosters);
+      if ((bulk || b0 < ctx.p.single) && clk("db", 11) && Number(P.db.boosters) > b0) { ecl.lastProg = now; did.push(`boostery ${b0}→${Number(P.db.boosters)}`); }
+      if (!grassAutomated()) for (const id of [11, 12, 13, 14, 15, 16]) if (buyMax("dgr", id)) did.push(`grass ${id}`);
+      const stalled = now - ecl.lastProg > ctx.p.stall;
+      if (!timerUp && timeLeft <= ctx.p.finalAt) { ecl.phase = "final"; ecl.phaseStart = ecl.lastDv15 = now; }
+      else if (stalled) {
+        ecl.phase = dvUpgradesLeft().length ? "cloud" : "final";
+        ecl.phaseStart = ecl.lastDv15 = now;
+      }
+    } else if (ecl.phase === "cloud") {
+      if (!P.dv.producingClouds) clk("dv", 11);
+      for (const id of [11, 16, 12, 13, 14, 15]) if (buyMax("dv", id)) did.push(`dv ${id}`);
+      for (const id of dvUpgradesLeft()) if (window.canAffordUpgrade("dv", id)) { window.buyUpgrade("dv", id); did.push(`dv upg ${id}`); }
+      if (!dvUpgradesLeft().length || now - ecl.phaseStart > ctx.p.cloudMax) {
+        clk("dv", 12); clk("dv", 13); // stop i chmury na 0 (zdejmuje nerf i szybszy upływ czasu)
+        ecl.phase = "grind"; ecl.lastProg = now; did.push("chmury: koniec");
+      }
+    } else if (ecl.phase === "final") {
+      // Najpierw ostatni reset, jeśli akurat dostępny.
+      if (clk("le", 13)) did.push(`reset LE (${Number(P.le.resetAmount)})`);
+      if (!P.dv.producingClouds) clk("dv", 11);
+      const n15 = buyMax("dv", 15);
+      if (n15) { ecl.lastDv15 = now; did.push(`Vaporized Eclipse +${n15}`); }
+      for (const id of [11, 16]) buyMax("dv", id);
+      const doneBuying = now - ecl.lastDv15 > ctx.p.finalStall;
+      if (ctx.p.exit && doneBuying && clk("le", 14)) {
+        ecl.active = false; ctx.did(); ctx.log("Eclipse: wyjście");
+        return ctx.status("wyszedłem z Eclipse");
       }
     }
-    ctx.status(`boostery ${Number(P.db.boosters)}${bulk ? " (bulk)" : ""}${grassAutomated() ? " · grass auto" : ""}${done.length ? " · " + done.join(", ") : ""}`);
+    if (did.length) ctx.did(did.length);
+    const left = timerUp ? "" : ` · czas ${window.formatTime(timeLeft)}`;
+    ctx.status(`${ecl.phase} · resety ${Number(P.le.resetAmount)} · ES ${window.formatWhole(P.le.eclipseShardsToGetTrue)} · boostery ${Number(P.db.boosters)}${left}${did.length ? " · " + did.join(", ") : ""}`);
   },
 };
