@@ -201,11 +201,12 @@ export const petShop = {
           const item = p.shop[name]?.[j];
           if (!item || !clickVisible(shopSel[idx]) || (!ctx.p.hidden && !inShopLayout(g.tab, shopSel[idx])) || item.current.gte(0)) continue;
           const short = shortfall(idx);
-          if (short === null) continue;
+          // Priorytetowe kupujemy też przy maks. poziomie tieru: nadmiar XP przechodzi na kolejny tier.
+          if (short === null && !(focus.has(idx) && window.tmp.pet.levelables[idx]?.unlocked)) continue;
           const buffer = ctx.p.fragBuffer ? fragmentationBuffer(idx) : 0;
-          let need = Math.max(0, short + buffer);
+          let need = Math.max(0, (short ?? 0) + buffer);
           const base = shopBase(name, j);
-          if (focus.has(idx) && need > 0) {
+          if (focus.has(idx)) {
             // Największy bulk w budżecie: base·(0,05b + 0,95)·b ≤ budżet.
             const budget = Math.max(0, Math.min(pp() - reserve, pp() * ctx.p.focusPct / 100));
             const max = Math.floor((-0.95 + Math.sqrt(0.9025 + 0.2 * budget / base)) / 0.1);
