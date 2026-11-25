@@ -273,6 +273,8 @@ const FRAG_ITEMS = { 0: 401, 1: 402, 2: 403, 3: "sing", 4: 110, 5: 210, 6: 310, 
 // Pule petów kupowanych wspólną walutą fragmentów: idzie w najtańszy następny poziom.
 const FRAG_POOLS = { sing: { pets: [404, 405, 406], cur: "singularityFragments" }, anti: { pets: [407], cur: "antiSingularityFragments" } };
 
+const getAmt = id => Number(window.getBuyableAmount("pet", id));
+
 export const fragmentShop = {
   id: "fragment-shop",
   name: "Fragment Shop",
@@ -281,11 +283,14 @@ export const fragmentShop = {
   description:
     "Sklep we Fragmentation: gdy pozycja jest gotowa, kupuje tyle fragmentów, ile brakuje do następnego poziomu peta, i go awansuje. " +
     "Singularity / Anti-Singularity Fragment idzie w najtańszy następny poziom petów z tej puli. Legendarne (Eclipse, Geroa, Vespasian) dostają XP wprost. Przy ścisłej kolejności nie kupuje niższych pozycji, " +
-    "gdy wyższa jest gotowa, ale za droga.",
+    "gdy wyższa jest gotowa, ale za droga. Przed sklepem kupuje buyables FB (np. FB-1 i FB-4 wzmacniają też pasywne fragmenty z SME-B8), " +
+    "o ile poziom kosztuje nie więcej niż podany % posiadanych fragmentów.",
   params: [
     { key: "order", label: "Kolejność (0 Dotknight, 1 Dragon, 2 Cookie, 3 Singularity, 4 Coin, 5 Refined, 6 Evolution, 7 Eclipse, 8 Geroa, 9 Vespasian, 10 Anti-Singularity)", type: "text", default: "7 8 1 0 2 3 9 10 4 5 6" },
     { key: "strict", label: "Ścisła kolejność (oszczędzaj na wyższe pozycje)", type: "bool", default: false },
     { key: "partial", label: "Legendarne (Eclipse/Geroa/Vespasian): gdy nie stać na cały poziom, kupuj częściowo (XP zostaje)", type: "bool", default: true },
+    { key: "fb", label: "Buyables FB (przed sklepem), kolejność; puste = nie kupuj (1 +5% fragmentów, 4 +1 do sacrifice, 2 highest gain, 6/5 epic pety, 3 tańszy bulk)", type: "text", default: "4 1 2 6 5" },
+    { key: "fbPct", label: "FB: kupuj poziom, gdy kosztuje ≤ % posiadanych fragmentów każdego użytego typu", type: "number", default: 40, min: 1, max: 100, step: 5 },
   ],
   available: g => g.layerActive("pet") && tabVisible("content", "Fragmentation") && tabVisible("frags", "Shop"),
   run(ctx) {
@@ -293,6 +298,24 @@ export const fragmentShop = {
     fragBuy ??= buttonWith("fragShopCost1");
     const p = pet();
     const bought = [];
+    // Buyables FB-1..6 (zakładka Fragmentation → Buyables): poziom kupujemy, gdy kosztuje ≤ fbPct% każdej użytej waluty.
+    if (String(ctx.p.fb ?? "").trim()) {
+      const FB_CUR = { 1: ["lesserFragments"], 2: ["basicFragments"], 3: ["greaterFragments"] };
+      const ALL = ["lesserFragments", "basicFragments", "greaterFragments"];
+      for (let guard = 0; guard < 40; guard++) {
+        let did = false;
+        for (const id of ctx.parseIds(ctx.p.fb)) {
+          const t = window.tmp.pet.buyables?.[id];
+          if (!t?.unlocked || !t.canBuy) continue;
+          const cost = Number(t.cost);
+          if (!(FB_CUR[id] ?? ALL).every(c => cost <= Number(p[c]) * ctx.p.fbPct / 100)) continue;
+          const before = getAmt(id);
+          ctx.buyOne("pet", id);
+          if (getAmt(id) > before) { did = true; ctx.did(); bought.push(`FB-${id}`); break; }
+        }
+        if (!did) break;
+      }
+    }
     withRestore(["fragShopIndex", "fragShopInput"], () => {
       for (const idx of ctx.parseIds(ctx.p.order)) {
         const target = FRAG_ITEMS[idx];
