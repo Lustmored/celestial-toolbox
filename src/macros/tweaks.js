@@ -344,3 +344,33 @@ export const perfBar = {
   onEnable() { const el = document.getElementById("ctb-perf"); if (el) el.style.display = ""; },
   onDisable() { const el = document.getElementById("ctb-perf"); if (el) el.style.display = "none"; },
 };
+
+// Space Battle: arena ma `position: fixed` (stałe miejsce na ekranie), a treść zakładki przewija się w #layerHolder,
+// więc przy przewijaniu przyciski chowają się pod walką. Przesuwamy arenę o przewinięcie, żeby jechała razem ze stroną.
+// W trybie pełnoekranowym (boss) arena zostaje na miejscu.
+const arenaScroll = { raf: 0 };
+export const arenaFollowScroll = {
+  id: "tweak-arena-scroll",
+  name: "Space Battle: arena przewija się razem ze stroną",
+  group: "Wygląd",
+  toggle: true,
+  description: "Okno walki statkiem przesuwa się razem z przewijaną zakładką, zamiast wisieć w miejscu i zasłaniać przyciski. Tylko wygląd.",
+  available: () => Boolean(document.getElementById("layerHolder")),
+  onEnable() {
+    const step = () => {
+      arenaScroll.raf = requestAnimationFrame(step);
+      const a = document.getElementById("space-arena");
+      if (!a) return;
+      let fs = false;
+      try { fs = Boolean(window.eval("typeof arena !== 'undefined' && arena && arena._fullscreen")); } catch { /* brak areny */ }
+      const h = document.getElementById("layerHolder");
+      const m = fs || !h ? "0px" : `${-h.scrollTop}px`;
+      if (a.style.marginTop !== m) a.style.marginTop = m;
+    };
+    cancelAnimationFrame(arenaScroll.raf); step();
+  },
+  onDisable() {
+    cancelAnimationFrame(arenaScroll.raf); arenaScroll.raf = 0;
+    const a = document.getElementById("space-arena"); if (a) a.style.marginTop = "";
+  },
+};
