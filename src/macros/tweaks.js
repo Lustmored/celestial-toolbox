@@ -332,3 +332,15 @@ export const perfTweak = {
     if (tempOrig) { window.updateTemp = tempOrig; tempOrig = null; }
   },
 };
+
+// Pasek wydajności (FPS/TPS) przy dolnej krawędzi ekranu — rysuje go panel, ten przełącznik tylko go pokazuje.
+export const perfBar = {
+  id: "perf-bar",
+  name: "Pasek wydajności (FPS/TPS) na dole ekranu",
+  group: "Inne",
+  toggle: true,
+  description: "Pokazuje stały dymek z FPS, tickami gry na sekundę (cel: 20), najdłuższą przerwą między tickami i % CPU gry oraz toolboxa.",
+  available: () => true,
+  onEnable() { const el = document.getElementById("ctb-perf"); if (el) el.style.display = ""; },
+  onDisable() { const el = document.getElementById("ctb-perf"); if (el) el.style.display = "none"; },
+};

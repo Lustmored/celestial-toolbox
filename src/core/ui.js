@@ -195,7 +195,10 @@ export function mountUI(version) {
   document.body.append(perfEl);
   startPerf();
   const pad = (v, n) => String(v).padStart(n, " ");
+  const perfShown = () => Boolean(settings().macros?.["perf-bar"]?.enabled);
+  perfEl.style.display = perfShown() ? "" : "none";
   onPerf(p => {
+    perfEl.style.display = perfShown() ? "" : "none";
     const bad = p.tps < 18 || p.maxGap > 200;
     perfEl.style.color = bad ? "#ff7a7a" : "#9aa0b4";
     perfEl.style.borderColor = bad ? "#7a3a3a" : "#3a3d4d";
