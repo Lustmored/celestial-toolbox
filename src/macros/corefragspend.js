@@ -23,13 +23,27 @@ function discover() {
   return out;
 }
 
+/** ln(efekt po kupnie / efekt teraz) — liczone na chwilę podbitym poziomie. Gdy efekt nie jest liczbą: 1. */
+function factorGain(it) {
+  const B = window.layers[it.layer]?.buyables?.[it.id];
+  if (!B?.effect) return 1;
+  const n = window.getBuyableAmount(it.layer, it.id);
+  try {
+    const cur = Number(B.effect.call(B));
+    window.setBuyableAmount(it.layer, it.id, n.add(1));
+    const next = Number(B.effect.call(B));
+    return cur > 0 && next > cur ? Math.log(next / cur) : 1e-9;
+  } catch { return 1; } finally { window.setBuyableAmount(it.layer, it.id, n); }
+}
+
 export const coreFragmentSpend = {
   id: "core-fragment-spend",
   name: "Core Fragments: wydawanie",
   group: "Singularity",
   every: 2,
   description:
-    "Dla każdego typu Core Fragments kupuje w kolejności grup: pylon factors → fabryka (Assembler) → buyables CF; rzecz kupuje, gdy kosztuje ≤ X% " +
+    "Dla każdego typu Core Fragments kupuje w kolejności grup: pylon factors → fabryka (Assembler) → buyables CF; rzecz kupuje, gdy kosztuje ≤ X% "
+      + "(pylon factors: najpierw ten, który daje największy przyrost mnożnika na fragment; pozostałe tylko drobiazgi względem niego) " +
     "posiadanych fragmentów tego typu (pasywki zależą od posiadanej ilości); niższa grupa kupuje tylko drobiazgi względem tego, na co odkłada wyższa. " +
     "Tech do depozytu w Light Rift: tylko Factory 303 (do poziomu 45 zawsze, gdy stać). " +
     "Radioactive ma niższy limit (pasywka ×SP).",
@@ -62,6 +76,7 @@ export const coreFragmentSpend = {
         let best = null, cap = Infinity; // cap: limit kosztu dla niższych grup (odkładanie na wyższą)
         for (const g of [0, 1, 2]) {
           let cheapest = Infinity;
+          const avail = [];
           for (const it of mine) {
             if (it.group !== g) continue;
             const t = window.tmp[it.layer]?.buyables?.[it.id];
@@ -69,15 +84,28 @@ export const coreFragmentSpend = {
             const lim = Number(t.purchaseLimit ?? Infinity);
             if (Number(window.getBuyableAmount(it.layer, it.id)) >= lim) continue;
             const cost = Number(t.cost);
-            cheapest = Math.min(cheapest, cost);
-            if (!t.canBuy || cost > cap) continue;
+            if (!(cost > 0)) continue;
+            avail.push({ ...it, cost, canBuy: t.canBuy });
+          }
+          // Pylon factors (grupa 0): cel = najlepszy przyrost mnożnika na fragment (ln(efekt po/przed) / koszt),
+          // a nie najtańszy — inaczej drobne poziomy Factor I zjadają fragmenty odkładane na Factor III.
+          let target = null;
+          if (g === 0) for (const it of avail) {
+            it.eff = factorGain(it) / it.cost;
+            if (!target || it.eff > target.eff) target = it;
+          }
+          for (const it of avail) {
+            cheapest = Math.min(cheapest, it.cost);
+            if (!it.canBuy || it.cost > cap) continue;
+            if (target && it !== target && it.cost > target.cost * ctx.p.groupRatio / 100) continue;
             // Factory 303 przyspiesza Tech do Light Rift — zwraca się szybko, kupujemy do progu niezależnie od limitu.
             const faTech = it.layer === "fa" && it.id === 303 && Number(window.getBuyableAmount("fa", 303)) < ctx.p.techFa;
-            if (!faTech && !(cost <= held * pct / 100)) continue;
-            if (!best || cost < best.cost) best = { ...it, cost };
+            if (!faTech && !(it.cost <= held * pct / 100)) continue;
+            if (!best || (target ? it === target || (best !== target && it.cost < best.cost) : it.cost < best.cost)) best = it;
           }
           if (best) break;
-          if (isFinite(cheapest)) cap = Math.min(cap, cheapest * ctx.p.groupRatio / 100);
+          const ref = target ? target.cost : cheapest;
+          if (isFinite(ref)) cap = Math.min(cap, ref * ctx.p.groupRatio / 100);
         }
         if (!best || !ctx.buyOne(best.layer, best.id)) break;
         bought.push(`${NAMES[k]}: ${best.layer} ${best.id}`);
