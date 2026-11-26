@@ -221,12 +221,14 @@ export const petShop = {
         petQueue.push(...cands);
       }
       petQueue.sort((a, b) => (b.focus - a.focus));
-      // Priorytetowy pet czeka na cooldown sklepu → odkładamy PP, żeby następny zakup był jak największy.
+      // Priorytetowy pet czeka na cooldown sklepu (albo przycisk jeszcze się nie pokazał po odnowieniu) → odkładamy PP,
+      // żeby następny zakup był jak największy.
       if (ctx.p.focusHold > 0) for (const idx of focus) {
+        if (petQueue.some(c => c.idx === idx)) continue;
         const e = Object.entries(GROUPS).find(([, g]) => idx >= g.first && idx < g.first + 9);
         const item = e && p.shop[e[0]]?.[idx - e[1].first];
-        if (!item || item.current.lt(0) || !window.tmp.pet.levelables[idx]?.unlocked) continue;
-        if (!clickVisible(shopSel[idx]) || (!ctx.p.hidden && !inShopLayout(e[1].tab, shopSel[idx]))) continue;
+        if (!item || !window.tmp.pet.levelables[idx]?.unlocked) continue;
+        if (!ctx.p.hidden && !inShopLayout(e[1].tab, shopSel[idx])) continue;
         holding = idx; reserve = Math.max(reserve, pp() * ctx.p.focusHold / 100); break;
       }
       // Darmowe awanse (XP już jest) od razu.
@@ -248,6 +250,19 @@ export const petShop = {
         return best;
       };
       const ok = cost => cost <= ctx.p.maxCost && pp() - cost >= reserve;
+
+      // --- 2a. Priorytetowe pety najpierw — przed ESC i resztą, z pełnym budżetem.
+      for (const c of pets.filter(c => c.focus)) {
+        if (c.cost > pp() - reserve) continue;
+        pets.splice(pets.indexOf(c), 1);
+        p.shopIndex = c.idx;
+        setBulk("shopInput", c.need);
+        const before = pp();
+        if (ctx.click("pet", 1002, { refresh: true })) {
+          st.pets += before - pp(); ctx.did(); levelUp(c.idx);
+          bought.push(`${c.idx}×${c.need}`);
+        }
+      }
 
       // --- 2b. ESC (Evolution Shard Chance) ma priorytet: najtańszy poziom, póki kosztuje ≤ escPct% PP (bez limitu maxCost).
       if (beOn && ctx.p.escPct > 0) for (let guard = 0; guard < 60; guard++) {
