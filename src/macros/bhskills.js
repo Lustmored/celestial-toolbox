@@ -17,6 +17,7 @@ function classify(def, flip) {
   if (def.instant) {
     if (type === "effect") return "perma";                     // np. Motivation (kumuluje się)
     if (type === "heal") return "heal";
+    if (type === "function" && def.target === "allPlayer") return "heal";   // Violet Resonance: leczenie całej drużyny
     if (type === "shield") return "shield";
     if (type === "damage") return "attack";
     return "fight";                                            // cooldown / reset itp.
