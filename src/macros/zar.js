@@ -480,7 +480,6 @@ export const cardsHelper = {
 // Zar's Dungeon: blackjack o Zar Chips. Zasady gry: krupier dobiera, aż przebije wynik gracza albo dojdzie do 21;
 // 21 gracza zawsze wygrywa. Strategię policzono dokładnie (talia ~nieskończona): P(wygranej) ≈ 48%.
 // Wygrana zwraca stawkę Evolution Shards i daje Zar Chips; przegrana zabiera stawkę.
-const ZD_HARD = { 15: [5, 6], 16: [2, 3, 4, 5, 6] }; // stój przy twardych 15/16 tylko na te karty krupiera
 function zdTotal(hand) {
   let t = 0, a = 0;
   for (const c of hand) {
@@ -497,9 +496,12 @@ function zdShouldHit(hand, dealerCard) {
   const up = zdTotal([dealerCard]).t;
   if (t >= 21) return false;
   if (soft) return t <= 17 || (t === 18 && (up === 11 || up >= 9));
+  // Wariant gry: krupier dobiera, aż przebije wynik gracza (albo ≥21); 21 u gracza = wygrana od razu.
+  // Strategia policzona dokładnie dla tych zasad (~48,2% wygranych).
   if (t <= 14) return true;
   if (t >= 17) return false;
-  return !(ZD_HARD[t] || []).includes(up);
+  if (t === 15) return !(up === 4 || up === 5);
+  return up >= 7; // 16
 }
 
 export const zarBlackjack = {
@@ -508,7 +510,7 @@ export const zarBlackjack = {
   group: "Universe Epsilon",
   every: 0.5,
   description:
-    "Gra w blackjacka optymalną strategią (~48% wygranych) i od razu wydaje Zar Chips na ZC-buyable (domyślnie głównie ZC-1: ×4 Chance Points). " +
+    "Gra w blackjacka optymalną strategią dla zasad tej gry (~48% wygranych) i od razu wydaje Zar Chips na ZC-buyable (domyślnie głównie ZC-1: ×4 Chance Points). " +
     "Nie gra, gdy Evolution Shardów zostałoby mniej niż rezerwa.",
   params: [
     { key: "reserve", label: "Rezerwa Evolution Shards (nie graj poniżej)", type: "number", default: 30000, min: 0, step: 1000 },
@@ -520,17 +522,25 @@ export const zarBlackjack = {
   run(ctx) {
     const P = W().player, zd = P.zd, L = W().layers.zd;
     if (P.bh?.currentStage === "zarDungeon") return ctx.status("trwa walka w Zar's Dungeon (BH)");
+    if (!ctx.state.v2) { ctx.state.w = 0; ctx.state.l = 0; ctx.state.v2 = true; } // stare liczniki liczyły puste powtórki
     let won = 0, lost = 0;
     for (let g = 0; g < ctx.p.games; g++) {
       if (zd.gameOver) {
         if (D(P.cb.evolutionShards).sub(zd.gameCost).lt(ctx.p.reserve)) break;
         if (!L.clickables[13].canClick()) break;
-        W().clickClickable("zd", 13);
+        // Bezpośrednio onClick: clickClickable sprawdza canClick z tmp, który odświeża się raz na tick —
+        // druga i kolejne gry w tym samym ticku byłyby po cichu ignorowane.
+        L.clickables[13].onClick();
       }
+      // Stand w grze porównuje z player.zd.playerScore, który gra przelicza dopiero w update() —
+      // bez tego po rozdaniu wynik gracza to 0 i krupier „wygrywa” jedną kartą.
+      L.update(0);
       for (let step = 0; step < 12 && !zd.gameOver; step++) {
         const hand = zd.playerHand;
         if (Array.isArray(hand[0])) break; // podział rąk — tego nie obsługujemy
-        W().clickClickable("zd", zdShouldHit(hand, zd.dealerHand[0]) ? 11 : 12);
+        const b = L.clickables[zdShouldHit(hand, zd.dealerHand[0]) ? 11 : 12];
+        if (!b.canClick()) break;
+        b.onClick();
         L.update(0);
       }
       if (!zd.gameOver) break;
