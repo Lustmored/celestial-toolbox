@@ -138,6 +138,7 @@ export const petShop = {
     { key: "hidden", label: "Kupuj też pety z przycisków poza układem sklepu (308/309 — prawdopodobnie błąd interfejsu gry)", type: "bool", default: false },
     { key: "focus", label: "Priorytetowe pety (np. 303): kupowane pierwsze, w największym bulku, na jaki stać", type: "text", default: "" },
     { key: "focusPct", label: "Priorytetowe: maks. % PP na jeden zakup", type: "number", default: 100, min: 1, max: 100, step: 5 },
+    { key: "focusHold", label: "Priorytetowe: % PP odkładany, gdy czekają na cooldown sklepu (reszta zakupów tylko z nadwyżki)", type: "number", default: 100, min: 0, max: 100, step: 5 },
     { key: "beShare", label: "Button Enhancement: docelowy % wydatków (0 = nie kupuj)", type: "number", default: 25, min: 0, max: 100, step: 5 },
     { key: "beEsc", label: "Button Enhancement: kupuj też ESC w ramach udziału", type: "bool", default: true },
     { key: "escPct", label: "ESC (szansa na Evo Shardy) poza kolejką: kupuj najtańszy poziom, gdy kosztuje ≤ % PP (0 = wyłącz)", type: "number", default: 25, min: 0, max: 100, step: 5 },
@@ -157,6 +158,7 @@ export const petShop = {
     const pp = () => Number(window.player.cb.petPoints);
     const bought = [];
     let reserve = ctx.p.reserve;
+    let holding = null;
 
     // Liczniki wydatków z wygaszaniem.
     const st = ctx.state;
@@ -219,6 +221,14 @@ export const petShop = {
         petQueue.push(...cands);
       }
       petQueue.sort((a, b) => (b.focus - a.focus));
+      // Priorytetowy pet czeka na cooldown sklepu → odkładamy PP, żeby następny zakup był jak największy.
+      if (ctx.p.focusHold > 0) for (const idx of focus) {
+        const e = Object.entries(GROUPS).find(([, g]) => idx >= g.first && idx < g.first + 9);
+        const item = e && p.shop[e[0]]?.[idx - e[1].first];
+        if (!item || item.current.lt(0) || !window.tmp.pet.levelables[idx]?.unlocked) continue;
+        if (!clickVisible(shopSel[idx]) || (!ctx.p.hidden && !inShopLayout(e[1].tab, shopSel[idx]))) continue;
+        holding = idx; reserve = Math.max(reserve, pp() * ctx.p.focusHold / 100); break;
+      }
       // Darmowe awanse (XP już jest) od razu.
       for (const c of petQueue.filter(c => c.need === 0)) if (levelUp(c.idx)) { ctx.did(); bought.push(`${c.idx}↑`); }
       const pets = petQueue.filter(c => c.need > 0);
@@ -286,6 +296,7 @@ export const petShop = {
     ctx.persist();
     const share = st.pets + st.be > 0 ? Math.round(100 * st.be / (st.pets + st.be)) : 0;
     if (bought.length) ctx.status(`kupiono: ${bought.join(", ")} · BE ${share}% wydatków`);
+    else if (holding) ctx.status(`odkładam PP na ${holding} (${window.formatWhole(pp())} PP)`);
     else if (reserve > ctx.p.reserve) ctx.status(`odkładam PP na Paragon Shardy (do ${Math.round(reserve).toLocaleString()} PP)`);
     if (reserve > ctx.p.reserve && bought.length) ctx.status(`kupiono: ${bought.join(", ")} · odkładam PP na Paragon Shardy (do ${Math.round(reserve).toLocaleString()} PP)`);
   },
