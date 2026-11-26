@@ -1,10 +1,10 @@
-// Core Fragments: wydawanie na fabryki (fa 301–307), pylon factors (i / n / in / cbs) i buyables CF (cof).
+// Core Fragments: wydawanie na fabryki (fa 301–307), pylon factors (i / n / in / cbs / s — Radioactive) i buyables CF (cof).
 // Polityka: dla każdego typu kupuj najtańszą rzecz, jeśli kosztuje ≤ X% posiadanych fragmentów tego typu.
 // Pasywki zależą od posiadanej ilości: dla Ancient/Tech/Paradox (wykładnik log/20) wydawanie prawie nic nie zmienia,
 // Radioactive (×SP) jest wrażliwy — niższy limit. Tech do depozytu w Light Rift idzie tylko na Factory 303.
 
 const NAMES = ["Ancient", "Natural", "Tech", "Paradox", "Radioactive", "Cosmic", "Temporal"];
-const SOURCES = [["fa", [301, 302, 303, 304, 305, 306, 307]], ["i", [11, 12, 13]], ["n", [1, 2, 3]], ["in", [11, 12, 13]], ["cbs", [101, 102, 103]], ["cof", null]];
+const SOURCES = [["fa", [301, 302, 303, 304, 305, 306, 307]], ["i", [11, 12, 13]], ["n", [1, 2, 3]], ["in", [11, 12, 13]], ["cbs", [101, 102, 103]], ["s", [1, 2, 3, 4, 5, 6]], ["cof", null]];
 
 /** Mapuje każdy buyable na typ fragmentu, porównując obiekt waluty z player.cof.coreFragments[k]. */
 function discover() {
