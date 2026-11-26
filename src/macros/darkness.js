@@ -476,7 +476,19 @@ export const eclipseRun = {
       const grown = n16 >= 100 || now - (ecl.lastDv16 ?? ecl.phaseStart) > ctx.p.cloudStall;
       // Transpiration stanęła: kończymy fazę (gdy ulepszeń nie stać — wrócimy po kolejnym resecie, z większą trawą).
       if (grown || now - ecl.phaseStart > ctx.p.cloudMax) {
-        for (let k = 0; k < 2; k++) for (const id of [12, 13, 14, 15]) buyOne("dv", id); // reszta raz/dwa
+        // Ulepszenia 2–4 (12–14) są tanie (wzrost ×1,2–1,3) i pomagają w dalszym grindzie: kupujemy najtańsze do oporu.
+        let n24 = 0;
+        for (let g = 0; g < 1000; g++) {
+          const ids = [12, 13, 14].filter(id => {
+            const b = window.layers.dv.buyables[id];
+            return b && new window.Decimal(window.getBuyableAmount("dv", id)).lt(b.purchaseLimit()) && b.canAfford.call(b);
+          });
+          if (!ids.length) break;
+          const id = ids.reduce((a, b) => (Number(window.layers.dv.buyables[a].cost()) <= Number(window.layers.dv.buyables[b].cost()) ? a : b));
+          if (!buyOne("dv", id)) break; n24++;
+        }
+        for (let k = 0; k < 2; k++) buyOne("dv", 15);
+        if (n24) did.push(`chmury 2–4 +${n24}`);
         clk("dv", 12); clk("dv", 13); // stop i chmury na 0 (zdejmuje nerf i szybszy upływ czasu)
         ecl.phase = "grind"; ecl.lastProg = now; did.push(`chmury: koniec (Transpiration ${n16})`);
       }
