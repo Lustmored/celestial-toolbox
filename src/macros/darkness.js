@@ -606,3 +606,25 @@ export const eclipseRun = {
     ctx.status(`${ecl.phase} · resety ${Number(P.le.resetAmount)} · ES ${window.formatWhole(P.le.eclipseShardsToGetTrue)} · boostery ${Number(P.db.boosters)}${left}${did.length ? " · " + did.join(", ") : ""}`);
   },
 };
+
+// Dark Grass: zbieranie działek (siatka 5×5). Rośnie losowa działka o wartość trawy, aż do limitu działki —
+// częste zbieranie nic nie traci, a nie pozwala działkom stać pełnym.
+export const darkGrassPicker = {
+  id: "dark-grass-picker",
+  name: "Dark Grass: zbieranie działek",
+  group: "Darkness / SMA",
+  every: 0.2,
+  description: "Zbiera wszystkie niepuste działki Dark Grass (siatka 5×5), w SMA i w Eclipse.",
+  params: [],
+  available: () => Boolean(window.layers.dgr?.grid && window.player.dgr),
+  run(ctx) {
+    const G = window.layers.dgr.grid;
+    let n = 0;
+    for (let c = 1; c <= 5; c++) for (let r = 1; r <= 5; r++) {
+      const id = Number(`${c}0${r}`);
+      const v = window.getGridData("dgr", id);
+      if (v && new window.Decimal(v).gt(0)) { G.onClick.call(G, v, id); n++; }
+    }
+    if (n) ctx.did(n);
+  },
+};
