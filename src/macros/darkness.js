@@ -507,7 +507,7 @@ export const eclipseRun = {
     }
     if (!ecl.active) {
       if (cloudsLeft()) { clk("dv", 12); clk("dv", 13); }
-      Object.assign(ecl, { phase: "grind", lastProg: now, phaseStart: now, lastDv15: now, lastDv16: now, lastGrass: now, active: true });
+      Object.assign(ecl, { keepClouds: false, phase: "grind", lastProg: now, phaseStart: now, lastDv15: now, lastDv16: now, lastGrass: now, active: true });
     }
     const did = [];
     const timeLeft = Number(P.pet.legPetTimers[0].current);
@@ -516,6 +516,7 @@ export const eclipseRun = {
     if (ctx.p.mode === "tc" && ecl.phase !== "final") return tcLoop(ctx, P, now, did, timeLeft, timerUp);
 
     if (ecl.phase === "grind") {
+      if (timerUp && ecl.keepClouds && !P.dv.producingClouds) clk("dv", 11);
       if (clk("le", 13)) { ecl.lastProg = now; did.push(`reset LE (${Number(P.le.resetAmount)})`); }
       const bulk = window.hasUpgrade("dv", 13);
       const b0 = Number(P.db.boosters);
@@ -558,7 +559,9 @@ export const eclipseRun = {
         }
         for (let k = 0; k < 2; k++) buyOne("dv", 15);
         if (n24) did.push(`chmury 2–4 +${n24}`);
-        clk("dv", 12); clk("dv", 13); // stop i chmury na 0 (zdejmuje nerf i szybszy upływ czasu)
+        // Stop i chmury na 0 (zdejmuje nerf i szybszy upływ czasu). Z kartą 403 czas Eclipse rośnie — chmury go przyspieszają,
+        // a od czasu Eclipse zależy m.in. time radiation w AD1 — więc wtedy produkcja zostaje włączona.
+        if (!timerUp) { clk("dv", 12); clk("dv", 13); } else ecl.keepClouds = true;
         ecl.phase = "grind"; ecl.lastProg = now; did.push(`chmury: koniec (Transpiration ${n16})`);
       }
     } else if (ecl.phase === "final") {
