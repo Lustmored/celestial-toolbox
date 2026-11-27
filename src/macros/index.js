@@ -18,6 +18,7 @@ import { rocketFuelXp } from "./rocketfuel.js";
 import { bhSkills, skipBulletHell } from "./bhskills.js";
 import { coreFragmentSpend } from "./corefragspend.js";
 import { lightRiftDeposit } from "./lightrift.js";
+import { radiationCollector } from "./ad1.js";
 import { instantResources, ritualAutoEnter, spaceZoneFarm } from "./instant.js";
 import { stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, ritualTwoShards, fixM26, perfTweak, perfBar, arenaFollowScroll } from "./tweaks.js";
 
@@ -31,5 +32,5 @@ export default [
   flowerPicker, pollenLoop, nectarLoop, hiveResearch, twigCollector, flowerGilding, nestFarm, rocketFuelXp,
   numbnessLoop,
   coinFlipper, cardsHelper, zarBlackjack, stableSoftcaps, claimAchievements, hideCardParticles, hideSlotParticles, arenaFollowScroll, ritualTwoShards, fixM26,
-  bhSkillButtons, labAutoEnter, bhSkills, skipBulletHell, coreFragmentSpend, lightRiftDeposit, perfTweak, perfBar,
+  bhSkillButtons, labAutoEnter, bhSkills, skipBulletHell, coreFragmentSpend, lightRiftDeposit, radiationCollector, perfTweak, perfBar,
 ];
