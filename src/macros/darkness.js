@@ -53,7 +53,7 @@ export const casinoKiller = {
     if (!mode) { ctx.status("poza SMA i Eclipse — wybory czekają na bieg"); return; }
     const prof = ctx.p.eclProfile;
     const listKey = mode === "eclipse" && prof === "gj" ? "gj" : mode === "sma" && ctx.p.smaProfile === "se" ? "se" : mode;
-    const wanted = ctx.parseIds(ctx.p[listKey]).filter(id => (id < 400 || (id > 400 && id < 500)) && window.player.pu.levelables[id]);
+    const wanted = ctx.parseIds(ctx.p[listKey]).filter(id => (id < 400 || (id > 400 && id < 600)) && window.player.pu.levelables[id]);
 
     const activated = [];
     let note = "";
@@ -92,14 +92,15 @@ export const casinoKiller = {
       const missing = wanted.filter(id => !hasCard(id));
       if (!missing.length) { note = "wszystkie karty z listy są aktywne"; break; }
       if (pu.storedSelections.lt(1)) { note = `czekam na wybór (${window.player.universe})`; break; }
-      const legOk = id => id < 400 || ctx.p.legForce || (pu.legendarySelectionActive && Number(pu.selectedPunchcards[4]) === id);
+      const legOk = id => id < 400 || id > 500 || ctx.p.legForce || (pu.legendarySelectionActive && Number(pu.selectedPunchcards[4]) === id);
       const next = missing.find(id => {
         const card = window.layers.pu.levelables[id];
         return card && legOk(id) && window.run(card.canSelect, card);
       });
       if (next === undefined) { note = `karty ${missing.join(", ")} niedostępne`; break; }
-      const leg = next > 400;
-      const cost = leg ? legendaryCost(next) : 1;
+      const leg = next > 400 && next < 500;
+      // Karty radioaktywne (5xx): zwykły slot, ale droższe — 3 wybory (503/505/506: 2), jak liczy gra.
+      const cost = leg ? legendaryCost(next) : next > 500 ? ([503, 505, 506].includes(next) ? 2 : 3) : 1;
       if (pu.storedSelections.lt(cost)) { note = `czekam na ${cost} wybory dla ${next} (mam ${window.formatWhole(pu.storedSelections)})`; break; }
 
       const slot = leg ? 4 : 0;
