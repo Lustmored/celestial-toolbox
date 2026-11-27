@@ -449,8 +449,10 @@ function tcLoop(ctx, P, now, did, timeLeft, timerUp) {
     Object.assign(tcSt, { t0: now, best: 0, bestT: now });
   }
   if (ending) {
-    if (ctx.p.endCards) { const cards = spendLeftoverCards(ctx); if (cards.length) did.push(`karty ${cards.join(", ")}`); }
-    if (ctx.p.exit && !canTc && clk("le", 14)) { ecl.active = false; ctx.did(); ctx.log("Eclipse: wyjście (kapsuły)"); return ctx.status("wyszedłem z Eclipse"); }
+    // Koniec czasu: ostatni reset kapsuł (już zrobiony wyżej, jeśli się dało), potem zwykły finał pod Eclipse Shards —
+    // reset kapsuł zeruje Vaporized Eclipse, więc shardy podbijamy dopiero po nim.
+    ecl.phase = "final"; ecl.phaseStart = ecl.lastDv15 = ecl.lastDv16 = now;
+    did.push("finał: shardy");
   }
   if (did.length) ctx.did(did.length);
   const left = timerUp ? "" : ` · czas ${window.formatTime(timeLeft)}`;
@@ -471,7 +473,7 @@ export const eclipseRun = {
     "Karty punchcard wybiera Casino Killer (profil Eclipse); w finale, gdy jego lista jest pełna, resztę wyborów makro wydaje na karty " +
     "tylko-Eclipse, potem o najniższym poziomie, potem z najmniejszym XP (podbijanie kart spoza listy). " +
     "Tryb Time Capsules: pętla — reset LE, boostery, trawa, ulepszenia i buyables chmur, Time buyables — i reset kapsuł, gdy tempo " +
-    "kapsuł/s minie szczyt; na koniec czasu Eclipse ostatni reset i wyjście.",
+    "kapsuł/s minie szczyt; na koniec czasu Eclipse ostatni reset kapsuł, a potem zwykły finał pod Eclipse Shards i wyjście.",
   params: [
     { key: "mode", label: "Cel biegu", type: "select", default: "es",
       options: [["es", "Eclipse Shards (chmury → finał pod Vaporized Eclipse)"], ["tc", "Time Capsules (pętla: chmury → reset kapsuł)"]] },
@@ -511,7 +513,7 @@ export const eclipseRun = {
     const timeLeft = Number(P.pet.legPetTimers[0].current);
     const timerUp = window.getLevelableTier?.("pu", 403, true); // z tą kartą czas rośnie, Eclipse nie kończy się sam
 
-    if (ctx.p.mode === "tc") return tcLoop(ctx, P, now, did, timeLeft, timerUp);
+    if (ctx.p.mode === "tc" && ecl.phase !== "final") return tcLoop(ctx, P, now, did, timeLeft, timerUp);
 
     if (ecl.phase === "grind") {
       if (clk("le", 13)) { ecl.lastProg = now; did.push(`reset LE (${Number(P.le.resetAmount)})`); }
