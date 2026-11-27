@@ -39,6 +39,7 @@ export const casinoKiller = {
     { key: "legFill", label: "Po zapełnieniu listy: dobieraj wylosowane karty, polując na legendarną", type: "bool", default: true },
     { key: "legendary", label: "Legendarne, na które polować", type: "text", default: "401" },
     { key: "legForce", label: "Legendarne jak zwykłe karty (bez czekania na 4% slot)", type: "bool", default: true },
+    { key: "aniFirst", label: "Aniciffo (403 na liście legendarnych): nie bierz żadnej karty, dopóki go nie przyzwiesz (gra wymaga biegu bez kart: 7 resetów LE w Eclipse / 10 poza)", type: "bool", default: true },
     { key: "legAlways", label: "Legendarna wylosowana w trakcie listy: bierz od razu (czeka na jej koszt)", type: "bool", default: true },
     { key: "fill", label: "Polowanie: które wylosowane karty brać najpierw", type: "text", default: "111 209 110 306 203 301 201 101" },
     { key: "maxPerRun", label: "Maks. kart na jedno uruchomienie", type: "number", default: 10, min: 1, step: 1 },
@@ -74,6 +75,18 @@ export const casinoKiller = {
       pu.selectedPunchcards[4] = prev;
       return `przycisk nieaktywny dla ${id}`;
     };
+    // Aniciffo (403) da się wybrać tylko w biegu, w którym nie wzięto jeszcze żadnej karty (du.noPunchcards),
+    // po 7 resetach LE w Eclipse albo 10 poza nim. Do tego momentu trzymamy wszystkie wybory — każda karta przekreśla 403.
+    const P = window.player;
+    if (ctx.p.aniFirst && legWanted.includes(403) && !hasCard(403) && P.du?.noPunchcards
+        && P.s?.pylonBuilt && P.bl?.noxDefeated && window.hasUpgrade("wel", 21)
+        && (P.pet.legPetTimers[0].active || window.hasUpgrade("ani", 16))) {
+      const need = P.pet.legPetTimers[0].active ? 7 : 10, cost = legendaryCost(403);
+      if (!P.du.aniciffoSummon) return ctx.status(`Aniciffo: czekam bez kart — resety LE ${Number(P.le.resetAmount)}/${need}, wybory ${window.formatWhole(pu.storedSelections)}/${cost}`);
+      if (pu.storedSelections.lt(cost)) return ctx.status(`Aniciffo przyzwany — zbieram wybory ${window.formatWhole(pu.storedSelections)}/${cost}`);
+      const r = takeLeg(403);
+      if (r) return ctx.status(r);
+    }
     while (activated.length < ctx.p.maxPerRun) {
       if (ctx.p.legAlways && !ctx.p.legForce && offeredLeg()) { const r = takeLeg(offeredLeg()); if (r) { note = r; break; } continue; }
       const missing = wanted.filter(id => !hasCard(id));
