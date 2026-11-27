@@ -44,3 +44,52 @@ export const radiationCollector = {
     if (n) { ctx.did(n); ctx.status(`zebrano ${n}`); }
   },
 };
+
+// AD1: buyables Aniciffo za Dark Radiation (11–14) — najtańszy najpierw, po jednym (zbalansowanie efektów).
+// Z ulepszeniem „ani 23” zakupy są darmowe, więc wtedy od razu maks. Opcjonalnie buyables za kamienie (21–24, 31–34).
+const buyCheapest = (ids, max = 2000) => {
+  const L = window.layers.ani, D = window.Decimal;
+  const free = window.hasUpgrade("ani", 23);
+  let n = 0;
+  if (free) {
+    for (const id of ids) {
+      const B = L.buyables[id];
+      if (!B || window.tmp.ani.buyables[id]?.unlocked === false) continue;
+      const before = new D(window.getBuyableAmount("ani", id));
+      if (before.gte(B.purchaseLimit()) || !B.canAfford.call(B)) continue;
+      B.buy.call(B, true);
+      n += Number(new D(window.getBuyableAmount("ani", id)).sub(before));
+    }
+    return n;
+  }
+  for (let g = 0; g < max; g++) {
+    const ok = ids.filter(id => {
+      const B = L.buyables[id];
+      return B && window.tmp.ani.buyables[id]?.unlocked !== false
+        && new D(window.getBuyableAmount("ani", id)).lt(B.purchaseLimit()) && B.canAfford.call(B);
+    });
+    if (!ok.length) break;
+    const id = ok.reduce((a, b) => (Number(L.buyables[a].cost()) <= Number(L.buyables[b].cost()) ? a : b));
+    L.buyables[id].buy.call(L.buyables[id]); n++;
+  }
+  return n;
+};
+
+export const aniciffoBuyables = {
+  id: "ad1-buyables",
+  name: "AD1: buyables za Dark Radiation (i opcjonalnie za kamienie)",
+  group: "AD1",
+  every: 0.5,
+  description:
+    "Kupuje buyables Aniciffo za Dark Radiation (11–14): zawsze najtańszy, po jednym, żeby efekty rosły równo " +
+    "(z darmowymi zakupami od razu do oporu). Opcjonalnie to samo za Temporal i Cosmic Stones.",
+  params: [
+    { key: "stones", label: "Kupuj też za Temporal/Cosmic Stones (21–24, 31–34)", type: "bool", default: false },
+  ],
+  available: () => Boolean(window.layers.ani?.buyables?.[11]),
+  run(ctx) {
+    let n = buyCheapest([11, 12, 13, 14]);
+    if (ctx.p.stones) n += buyCheapest([21, 22, 23, 24]) + buyCheapest([31, 32, 33, 34]);
+    if (n) { ctx.did(n); ctx.status(`kupiono ${n}`); }
+  },
+};
