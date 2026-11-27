@@ -398,6 +398,65 @@ function spendLeftoverCards(ctx) {
   return out;
 }
 
+// Tryb Time Capsules: wszystko naraz w pętli — reset LE, boostery, trawa, ulepszenia i buyables chmur, Time buyables —
+// a reset kapsuł, gdy tempo kapsuł/s (od ostatniego resetu) minie szczyt. Reset kapsuł zeruje chmury, ich buyables,
+// trawę i boostery, więc po nim pętla sama zaczyna od nowa.
+const tcSt = { t0: 0, best: 0, bestT: 0 };
+const buyTimeBuyables = () => {
+  let n = 0;
+  for (let g = 0; g < 2000; g++) {
+    const ids = [11, 12, 13, 14, 15, 16].filter(id => {
+      const b = window.layers.dt?.buyables?.[id];
+      if (!b || window.tmp.dt.buyables[id]?.unlocked === false) return false;
+      return new window.Decimal(window.getBuyableAmount("dt", id)).lt(b.purchaseLimit()) && b.canAfford.call(b);
+    });
+    if (!ids.length) break;
+    const id = ids.reduce((a, b) => (Number(window.layers.dt.buyables[a].cost()) <= Number(window.layers.dt.buyables[b].cost()) ? a : b));
+    if (!buyOne("dt", id)) break; n++;
+  }
+  return n;
+};
+function tcLoop(ctx, P, now, did, timeLeft, timerUp) {
+  const D = window.Decimal;
+  if (!tcSt.t0 || ecl.phase !== "tc") { Object.assign(tcSt, { t0: now, best: 0, bestT: now }); ecl.phase = "tc"; }
+  if (clk("le", 13)) did.push(`reset LE (${Number(P.le.resetAmount)})`);
+  const bulk = window.hasUpgrade("dv", 13), b0 = Number(P.db.boosters);
+  const bulkReady = Number(P.db.boosterBulk) >= ctx.p.bulkMin || now - (ecl.lastBoost ?? 0) >= ctx.p.bulkWait;
+  if ((bulk ? bulkReady : b0 < ctx.p.single) && clk("db", 11) && Number(P.db.boosters) > b0) { ecl.lastBoost = now; did.push(`boostery ${b0}→${Number(P.db.boosters)}`); }
+  if (!grassAutomated()) for (const id of [11, 12, 13, 14, 15, 16]) if (buyMax("dgr", id)) did.push(`grass ${id}`);
+  for (const id of dvUpgradesLeft()) if (window.canAffordUpgrade("dv", id)) { window.buyUpgrade("dv", id); did.push(`dv upg ${id}`); }
+  if (!P.dv.producingClouds) clk("dv", 11);
+  growClouds();
+  for (let g = 0; g < 1000; g++) {
+    const ids = [12, 13, 14].filter(id => {
+      const b = window.layers.dv.buyables[id];
+      return b && new D(window.getBuyableAmount("dv", id)).lt(b.purchaseLimit()) && b.canAfford.call(b);
+    });
+    if (!ids.length) break;
+    const id = ids.reduce((a, b) => (Number(window.layers.dv.buyables[a].cost()) <= Number(window.layers.dv.buyables[b].cost()) ? a : b));
+    if (!buyOne("dv", id)) break;
+  }
+  const nT = buyTimeBuyables(); if (nT) did.push(`Time buyables +${nT}`);
+
+  const toGet = Number(P.dt.timeCapsulesToGet), el = now - tcSt.t0, rate = el > 0 ? toGet / el : 0;
+  if (rate > tcSt.best) { tcSt.best = rate; tcSt.bestT = now; }
+  const ending = !timerUp && timeLeft <= ctx.p.finalAt;
+  const canTc = window.run(window.layers.dt.clickables[11].canClick, window.layers.dt.clickables[11]);
+  if (canTc && toGet >= 1 && (ending || (el >= ctx.p.tcMin && now - tcSt.bestT >= ctx.p.tcPatience))) {
+    clk("dt", 11);
+    did.push(`reset kapsuł +${window.formatWhole(toGet)} (${el.toFixed(0)} s)`);
+    ctx.log(`Time Capsules +${window.formatWhole(toGet)} po ${el.toFixed(0)} s`);
+    Object.assign(tcSt, { t0: now, best: 0, bestT: now });
+  }
+  if (ending) {
+    if (ctx.p.endCards) { const cards = spendLeftoverCards(ctx); if (cards.length) did.push(`karty ${cards.join(", ")}`); }
+    if (ctx.p.exit && !canTc && clk("le", 14)) { ecl.active = false; ctx.did(); ctx.log("Eclipse: wyjście (kapsuły)"); return ctx.status("wyszedłem z Eclipse"); }
+  }
+  if (did.length) ctx.did(did.length);
+  const left = timerUp ? "" : ` · czas ${window.formatTime(timeLeft)}`;
+  ctx.status(`kapsuły · ${window.formatWhole(P.dt.timeCapsules)} (+${window.formatWhole(toGet)} za ${el.toFixed(0)} s)${left}${did.length ? " · " + did.join(", ") : ""}`);
+}
+
 export const eclipseRun = {
   id: "eclipse-run",
   name: "Eclipse: autopilot biegu",
@@ -410,8 +469,14 @@ export const eclipseRun = {
     "(m.in. bulk boosterów), reszta buyables raz/dwa, potem stop i chmury na 0. 3) Dalej grind. " +
     "4) Finał (postęp znów stoi albo kończy się czas Eclipse): chmury pod Vaporized Eclipse (×ES przy wyjściu) i wyjście. " +
     "Karty punchcard wybiera Casino Killer (profil Eclipse); w finale, gdy jego lista jest pełna, resztę wyborów makro wydaje na karty " +
-    "tylko-Eclipse, potem o najniższym poziomie, potem z najmniejszym XP (podbijanie kart spoza listy).",
+    "tylko-Eclipse, potem o najniższym poziomie, potem z najmniejszym XP (podbijanie kart spoza listy). " +
+    "Tryb Time Capsules: pętla — reset LE, boostery, trawa, ulepszenia i buyables chmur, Time buyables — i reset kapsuł, gdy tempo " +
+    "kapsuł/s minie szczyt; na koniec czasu Eclipse ostatni reset i wyjście.",
   params: [
+    { key: "mode", label: "Cel biegu", type: "select", default: "es",
+      options: [["es", "Eclipse Shards (chmury → finał pod Vaporized Eclipse)"], ["tc", "Time Capsules (pętla: chmury → reset kapsuł)"]] },
+    { key: "tcPatience", label: "Kapsuły: reset, gdy tempo (kapsuły/s od ostatniego resetu) spada przez (s)", type: "number", default: 3, min: 0.5, step: 0.5 },
+    { key: "tcMin", label: "Kapsuły: najkrótszy odstęp między resetami (s)", type: "number", default: 5, min: 0, step: 1 },
     { key: "single", label: "Boostery pojedynczo: do ilu", type: "number", default: 16, min: 0, step: 1 },
     { key: "stall", label: "Przed chmurami: postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 5, min: 1, step: 1 },
     { key: "stall2", label: "Przed finałem: postęp stoi, gdy brak resetu i nowych boosterów przez (s)", type: "number", default: 12, min: 1, step: 1 },
@@ -445,6 +510,8 @@ export const eclipseRun = {
     const did = [];
     const timeLeft = Number(P.pet.legPetTimers[0].current);
     const timerUp = window.getLevelableTier?.("pu", 403, true); // z tą kartą czas rośnie, Eclipse nie kończy się sam
+
+    if (ctx.p.mode === "tc") return tcLoop(ctx, P, now, did, timeLeft, timerUp);
 
     if (ecl.phase === "grind") {
       if (clk("le", 13)) { ecl.lastProg = now; did.push(`reset LE (${Number(P.le.resetAmount)})`); }
