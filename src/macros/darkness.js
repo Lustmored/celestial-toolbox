@@ -351,7 +351,10 @@ const buyOne = (layer, id) => {
   return Number(window.getBuyableAmount(layer, id)) > before;
 };
 /** Chmury: na zmianę Transpiration (16) i Vaporized Clouds (11), pojedynczo. Zwraca, czy kupiono 16. */
+// Heart Upgrade I (hr 11): gra sama (i za darmo) kupuje wszystkie buyables Vaporizera — wtedy nie dublujemy zakupów.
+const dvAuto = () => Boolean(window.hasUpgrade?.("hr", 11));
 const growClouds = () => {
+  if (dvAuto()) return false;
   let got16 = false;
   for (let g = 0; g < 400; g++) {
     const a = buyOne("dv", 16), b = buyOne("dv", 11);
@@ -429,7 +432,7 @@ function tcLoop(ctx, P, now, did, timeLeft, timerUp) {
   for (const id of dvUpgradesLeft()) if (window.canAffordUpgrade("dv", id)) { window.buyUpgrade("dv", id); did.push(`dv upg ${id}`); }
   if (!P.dv.producingClouds) clk("dv", 11);
   growClouds();
-  for (let g = 0; g < 1000; g++) {
+  for (let g = 0; g < (dvAuto() ? 0 : 1000); g++) {
     const ids = [12, 13, 14].filter(id => {
       const b = window.layers.dv.buyables[id];
       return b && new D(window.getBuyableAmount("dv", id)).lt(b.purchaseLimit()) && b.canAfford.call(b);
@@ -550,7 +553,7 @@ export const eclipseRun = {
       if (grown || now - ecl.phaseStart > ctx.p.cloudMax) {
         // Ulepszenia 2–4 (12–14) są tanie (wzrost ×1,2–1,3) i pomagają w dalszym grindzie: kupujemy najtańsze do oporu.
         let n24 = 0;
-        for (let g = 0; g < 1000; g++) {
+        for (let g = 0; g < (dvAuto() ? 0 : 1000); g++) {
           const ids = [12, 13, 14].filter(id => {
             const b = window.layers.dv.buyables[id];
             return b && new window.Decimal(window.getBuyableAmount("dv", id)).lt(b.purchaseLimit()) && b.canAfford.call(b);

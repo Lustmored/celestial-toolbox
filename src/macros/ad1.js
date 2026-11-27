@@ -88,7 +88,8 @@ export const aniciffoBuyables = {
   ],
   available: () => Boolean(window.layers.ani?.buyables?.[11]),
   run(ctx) {
-    let n = buyCheapest([11, 12, 13, 14]);
+    // Z ulepszeniem „ani 23” gra sama kupuje 11–14 (za darmo) — wtedy zostają tylko kamienie.
+    let n = window.hasUpgrade("ani", 23) ? 0 : buyCheapest([11, 12, 13, 14]);
     if (ctx.p.stones) n += buyCheapest([21, 22, 23, 24]) + buyCheapest([31, 32, 33, 34]);
     if (n) { ctx.did(n); ctx.status(`kupiono ${n}`); }
   },
