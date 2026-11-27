@@ -402,6 +402,8 @@ function spendLeftoverCards(ctx) {
 // a reset kapsuł, gdy tempo kapsuł/s (od ostatniego resetu) minie szczyt. Reset kapsuł zeruje chmury, ich buyables,
 // trawę i boostery, więc po nim pętla sama zaczyna od nowa.
 const tcSt = { t0: 0, best: 0, bestT: 0 };
+// Aniciffo Upgrade (ani 19): booster nie resetuje generatorów — wtedy kupujemy zawsze i od razu.
+const boostFree = () => Boolean(window.hasUpgrade?.("ani", 19));
 const buyTimeBuyables = () => {
   let n = 0;
   for (let g = 0; g < 2000; g++) {
@@ -422,7 +424,7 @@ function tcLoop(ctx, P, now, did, timeLeft, timerUp) {
   if (clk("le", 13)) did.push(`reset LE (${Number(P.le.resetAmount)})`);
   const bulk = window.hasUpgrade("dv", 13), b0 = Number(P.db.boosters);
   const bulkReady = Number(P.db.boosterBulk) >= ctx.p.bulkMin || now - (ecl.lastBoost ?? 0) >= ctx.p.bulkWait;
-  if ((bulk ? bulkReady : b0 < ctx.p.single) && clk("db", 11) && Number(P.db.boosters) > b0) { ecl.lastBoost = now; did.push(`boostery ${b0}→${Number(P.db.boosters)}`); }
+  if ((boostFree() || (bulk ? bulkReady : b0 < ctx.p.single)) && clk("db", 11) && Number(P.db.boosters) > b0) { ecl.lastBoost = now; did.push(`boostery ${b0}→${Number(P.db.boosters)}`); }
   if (!grassAutomated()) for (const id of [11, 12, 13, 14, 15, 16]) if (buyMax("dgr", id)) did.push(`grass ${id}`);
   for (const id of dvUpgradesLeft()) if (window.canAffordUpgrade("dv", id)) { window.buyUpgrade("dv", id); did.push(`dv upg ${id}`); }
   if (!P.dv.producingClouds) clk("dv", 11);
@@ -522,7 +524,7 @@ export const eclipseRun = {
       const b0 = Number(P.db.boosters);
       // Z bulkiem: większe paczki (każdy reset boosterów zeruje generatory), ale nie dłużej niż bulkWait.
       const bulkReady = Number(P.db.boosterBulk) >= ctx.p.bulkMin || now - (ecl.lastBoost ?? 0) >= ctx.p.bulkWait;
-      if ((bulk ? bulkReady : b0 < ctx.p.single) && clk("db", 11) && Number(P.db.boosters) > b0) {
+      if ((boostFree() || (bulk ? bulkReady : b0 < ctx.p.single)) && clk("db", 11) && Number(P.db.boosters) > b0) {
         ecl.lastProg = ecl.lastBoost = now; did.push(`boostery ${b0}→${Number(P.db.boosters)}`);
       }
       if (!grassAutomated()) for (const id of [11, 12, 13, 14, 15, 16]) if (buyMax("dgr", id)) { ecl.lastGrass = now; did.push(`grass ${id}`); }
