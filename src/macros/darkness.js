@@ -14,7 +14,10 @@ function legendaryCost(id) {
 
 // Układy kart: gotowe zestawy priorytetów (SMA / Eclipse / legendarna) do przełączania jednym wyborem.
 const CK_LAYOUTS = {
-  ad1: { name: "AD1: rozpad — Aniciffo + karty radioaktywne", leg: "403",
+  ad1: { name: "AD1: rozpad — Carbon-14 (trawa) w SMA i Eclipse", leg: "403",
+    sma: "301 501 108 206 205 502 309 111 209 212 300 302 110 203 101 201 306",
+    eclipse: "307 501 503 108 206 211 502 112 304 200 303 309 215 114 214 201 101" },
+  ad1mg: { name: "AD1: rozpad — Magnesium-28 w SMA, Carbon-14 w Eclipse", leg: "403",
     sma: "301 502 501 108 206 205 309 111 209 212 300 302 110 203 101 201 306",
     eclipse: "307 501 503 108 206 211 502 112 304 200 303 309 215 114 214 201 101" },
   ad1d1: { name: "AD1: rozkręcanie D1 — Aniciffo, bez kart radioaktywnych", leg: "403",
