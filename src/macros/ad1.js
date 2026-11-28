@@ -36,9 +36,19 @@ export const radiationCollector = {
       list.push(p);
     }
     list.sort((a, b) => order(String(a.image)) - order(String(b.image)));
+    // Mind i heart: gra robi reset tylko, gdy licznik jest DOKŁADNIE równy wymaganiu (eq). Kilka kliknięć w jednym ticku
+    // potrafi przeskoczyć wartość i licznik utyka powyżej (np. 43/25). Klikamy więc po jednej i nigdy ponad wymaganie.
+    const COUNTER = { mind: "mr", heart: "hr" };
+    const usedCounter = {};
     let n = 0;
     for (const p of list) {
       if (!window.particles[p.id]) continue;
+      const kind = Object.keys(COUNTER).find(k => RESET[k].test(String(p.image)));
+      if (kind) {
+        const L = window.player[COUNTER[kind]];
+        if (usedCounter[kind] || !L || new window.Decimal(L.particleClick).gte(L.particleClickReq)) continue;
+        usedCounter[kind] = true;
+      }
       try { window.run(p.onClick, p); n++; } catch (e) { /* cząsteczka zniknęła */ }
     }
     if (n) { ctx.did(n); ctx.status(`zebrano ${n}`); }
