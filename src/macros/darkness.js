@@ -247,7 +247,9 @@ export const spaceLoop = {
       }
     };
     // Tryb „co klatkę”: najpierw reset, potem od razu odkup — kolejna klatka rośnie już z kupionymi buyable.
-    if (ctx.p.reset && ctx.p.mode === "tick" && new D(P.ds.spaceEnergyToGet).gte(1) && ctx.click("ds", 11, { refresh: true })) {
+    // Mind VII (mr 17): poza Eclipse gra daje co sekundę 10% SE z resetu — reset (zerujący Normality) przestaje się opłacać.
+    const sePassive = window.hasUpgrade("mr", 17) && !P.pet?.legPetTimers?.[0]?.active;
+    if (ctx.p.reset && !sePassive && ctx.p.mode === "tick" && new D(P.ds.spaceEnergyToGet).gte(1) && ctx.click("ds", 11, { refresh: true })) {
       st.n_resets = (st.n_resets || 0) + 1; ctx.did();
     }
     if (ctx.p.buyN) {
@@ -296,7 +298,7 @@ export const spaceLoop = {
     const sec = (now - st.t0) / 1000;
     const rate = sec > 0 ? gain.div(sec) : new D(0);
     let why = "";
-    if (ctx.p.reset && sec >= ctx.p.minSec && gain.gte(1)) {
+    if (ctx.p.reset && !sePassive && sec >= ctx.p.minSec && gain.gte(1)) {
       if (ctx.p.mode === "time") { if (sec >= ctx.p.fixedSec) why = "czas"; }
       else if (st.bestRate && rate.lt(new D(st.bestRate))) { st.down = (st.down || 0) + 1; if (st.down >= ctx.p.patience) why = "szczyt tempa"; }
       else st.down = 0;
