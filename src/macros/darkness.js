@@ -16,7 +16,7 @@ function legendaryCost(id) {
 const CK_LAYOUTS = {
   ad1: { name: "AD1: rozpad — Aniciffo + karty radioaktywne", leg: "403",
     sma: "301 501 502 309 111 209 212 300 302 110 203 101 201 306",
-    eclipse: "501 503 108 206 211 502 112 304 200 307 303 309 215 114 214 201 101" },
+    eclipse: "307 501 503 108 206 211 502 112 304 200 303 309 215 114 214 201 101" },
   ad1d1: { name: "AD1: rozkręcanie D1 — Aniciffo, bez kart radioaktywnych", leg: "403",
     sma: "301 309 111 209 212 300 302 110 203 101 201 306",
     eclipse: "108 112 304 200 307 303 309 215 114 214 211 206 201 101" },
