@@ -12,37 +12,42 @@ function legendaryCost(id) {
   return Infinity;
 }
 
+// Układy kart: gotowe zestawy priorytetów (SMA / Eclipse / legendarna) do przełączania jednym wyborem.
+const CK_LAYOUTS = {
+  ad1: { name: "AD1: rozpad — Aniciffo + karty radioaktywne", leg: "403",
+    sma: "301 501 502 309 111 209 212 300 302 110 203 101 201 306",
+    eclipse: "503 501 502 108 112 304 200 307 303 309 215 114 214 211 206 201 101" },
+  ad1d1: { name: "AD1: rozkręcanie D1 — Aniciffo, bez kart radioaktywnych", leg: "403",
+    sma: "301 309 111 209 212 300 302 110 203 101 201 306",
+    eclipse: "108 112 304 200 307 303 309 215 114 214 211 206 201 101" },
+  blood: { name: "Blood — Humanity (401), bez Aniciffo", leg: "401",
+    sma: "301 309 111 209 212 300 302 110 203 101 201 306",
+    eclipse: "108 112 304 200 307 303 309 215 114 214 211 206 201 101" },
+  shards: { name: "Eclipse Shards — bez AD1", leg: "",
+    sma: "302 300 111 209 110 212 301 309 203 101 201 306",
+    eclipse: "108 112 304 200 303 211 206 307 201 101" },
+  gj: { name: "Grass Jump — bez AD1", leg: "",
+    sma: "302 300 111 209 110 212 301 309 203 101 201 306",
+    eclipse: "113 213 308 307 108 206 201" },
+};
+
 export const casinoKiller = {
   id: "casino-killer",
   name: "Casino Killer",
   group: "Darkness / SMA",
   every: 0.05,
   description:
-    "Dopóki są zapisane wybory punchcardów, aktywuje kolejne brakujące karty z listy priorytetów dla bieżącego trybu " +
-    "(Eclipse / SMA) zamiast wylosowanych — kilka naraz, jeśli wyborów starczy. " +
-    "Obsługuje zwykłe karty (ID < 400, koszt 1 wyboru) i legendarne (401–403) — legendarną bierze tylko wtedy, " +
-    "gdy gra pokazuje slot legendarny, i czeka, aż uzbiera się jej koszt (402 = 2 wybory). " +
-    "Gdy karty nie da się aktywować, przywraca wylosowany wybór. " +
-    "Polowanie na legendarną: gdy wszystkie karty z listy są aktywne, makro bierze wylosowane karty (każdy wybór to nowe losowanie, " +
-    "4% na slot legendarny), a gdy wypadnie legendarna z listy — odkłada wybory na jej koszt (401 = 5, po Noxie 3). " +
-    "„Profil w Eclipse”: Eclipse Shards (zwykła lista Eclipse — najpierw trawa i chmury, potem ×ES, /wymaganie resetu ES, " +
-    "dłuższy Eclipse, punkty) albo Grass Jump (wymaganie skoku, Grassjumpers, trawa).",
+    "Zamiast wylosowanych kart aktywuje kolejne brakujące karty z listy priorytetów dla bieżącego biegu (SMA / Eclipse), " +
+    "kilka naraz, jeśli wyborów starczy. Koszty jak w grze: zwykłe 1, radioaktywne 3 (503/505/506: 2), legendarne 401: 5 (po Noxie 3), " +
+    "402: 2, 403: 9 (z Mind V: 8). „Układ” to gotowy zestaw list — przełączasz jednym wyborem; „Własny” używa pól poniżej. " +
+    "Z Aniciffo (403) w układzie makro nie bierze żadnej karty, dopóki go nie przyzwie (gra wymaga biegu bez kart).",
   params: [
-    { key: "eclProfile", label: "Profil w Eclipse", type: "select", default: "es",
-      options: [["es", "Eclipse Shards (lista „Priorytet w Eclipse”)"], ["gj", "Grass Jump"]] },
-    { key: "gj", label: "Priorytet w Eclipse – profil GJ", type: "text", default: "113 213 308 307 108 206 201" },
-    { key: "sma", label: "Priorytet w SMA", type: "text", default: "100 302 300 301 111 209 203 101 201 306" },
-    { key: "smaProfile", label: "Profil w SMA", type: "select", default: "alloy",
-      options: [["alloy", "Starmetal Alloy (lista „Priorytet w SMA”)"], ["se", "Space Energy (lista „Priorytet w SMA – profil SE”)"]] },
-    { key: "se", label: "Priorytet w SMA – profil SE (Space, ×SE, Normality, Iridite)", type: "text", default: "302 300 401 111 209 110 212 301 203 101 201 306" },
-    { key: "eclipse", label: "Priorytet w Eclipse", type: "text", default: "108 112 304 200 303 211 206 307 201 101" },
-    { key: "legFill", label: "Po zapełnieniu listy: dobieraj wylosowane karty, polując na legendarną", type: "bool", default: true },
-    { key: "legendary", label: "Legendarne, na które polować", type: "text", default: "401" },
-    { key: "legForce", label: "Legendarne jak zwykłe karty (bez czekania na 4% slot)", type: "bool", default: true },
-    { key: "aniFirst", label: "Aniciffo (403 na liście legendarnych): nie bierz żadnej karty, dopóki go nie przyzwiesz (gra wymaga biegu bez kart: 7 resetów LE w Eclipse / 10 poza)", type: "bool", default: true },
-    { key: "legAlways", label: "Legendarna wylosowana w trakcie listy: bierz od razu (czeka na jej koszt)", type: "bool", default: true },
-    { key: "fill", label: "Polowanie: które wylosowane karty brać najpierw", type: "text", default: "111 209 110 306 203 301 201 101" },
-    { key: "maxPerRun", label: "Maks. kart na jedno uruchomienie", type: "number", default: 10, min: 1, step: 1 },
+    { key: "layout", label: "Układ kart", type: "select", default: "custom",
+      options: [...Object.entries(CK_LAYOUTS).map(([k, v]) => [k, v.name]), ["custom", "Własny (pola poniżej)"]] },
+    { key: "cSma", label: "Własny: priorytet w SMA", type: "text", default: "" },
+    { key: "cEclipse", label: "Własny: priorytet w Eclipse", type: "text", default: "" },
+    { key: "cLeg", label: "Własny: legendarna (401 / 402 / 403, pusto = żadna)", type: "text", default: "" },
+    { key: "aniFirst", label: "Aniciffo: nie bierz żadnej karty, dopóki go nie przyzwiesz (7 resetów LE w Eclipse / 10 poza)", type: "bool", default: true },
   ],
   available: g => g.layerActive("pu") && Boolean(window.layers.pu?.clickables?.[10]),
   run(ctx) {
@@ -51,21 +56,18 @@ export const casinoKiller = {
     const inSMA = Boolean(window.player.sma?.inStarmetalChallenge) && !inEclipse;
     const mode = inEclipse ? "eclipse" : inSMA ? "sma" : null;
     if (!mode) { ctx.status("poza SMA i Eclipse — wybory czekają na bieg"); return; }
-    const prof = ctx.p.eclProfile;
-    const listKey = mode === "eclipse" && prof === "gj" ? "gj" : mode === "sma" && ctx.p.smaProfile === "se" ? "se" : mode;
-    const wanted = ctx.parseIds(ctx.p[listKey]).filter(id => (id < 400 || (id > 400 && id < 600)) && window.player.pu.levelables[id]);
+    // Układ: gotowy albo własny. Własne pola puste → stare listy (sprzed układów), żeby nic się nie zmieniło po aktualizacji.
+    const L = CK_LAYOUTS[ctx.p.layout] ?? {
+      sma: ctx.p.cSma || (ctx.p.smaProfile === "se" ? ctx.p.se : ctx.p.sma) || "",
+      eclipse: ctx.p.cEclipse || (ctx.p.eclProfile === "gj" ? ctx.p.gj : ctx.p.eclipse) || "",
+      leg: ctx.p.cLeg || ctx.p.legendary || "",
+    };
+    const wanted = ctx.parseIds(L[mode]).filter(id => (id < 400 || (id > 400 && id < 600)) && window.player.pu.levelables[id]);
+    const maxPerRun = 10;
 
     const activated = [];
     let note = "";
-    const legWanted = ctx.parseIds(ctx.p.legendary).filter(id => id > 400 && id < 500);
-    const offeredLeg = () => {
-      if (ctx.p.legForce) {
-        const id = legWanted.find(x => !hasCard(x) && window.run(window.layers.pu.levelables[x]?.canSelect, window.layers.pu.levelables[x]));
-        return id || 0;
-      }
-      const c = pu.legendarySelectionActive ? Number(pu.selectedPunchcards[4]) : 0;
-      return legWanted.includes(c) && !hasCard(c) ? c : 0;
-    };
+    const legWanted = ctx.parseIds(L.leg).filter(id => id > 400 && id < 500);
     const takeLeg = id => {
       const cost = legendaryCost(id);
       if (pu.storedSelections.lt(cost)) return `legendarna ${id} wylosowana — zbieram ${window.formatWhole(pu.storedSelections)}/${cost} wyborów`;
@@ -87,12 +89,19 @@ export const casinoKiller = {
       const r = takeLeg(403);
       if (r) return ctx.status(r);
     }
-    while (activated.length < ctx.p.maxPerRun) {
-      if (ctx.p.legAlways && !ctx.p.legForce && offeredLeg()) { const r = takeLeg(offeredLeg()); if (r) { note = r; break; } continue; }
+    // Legendarna z układu (401/402) — przed zwykłymi kartami, gdy tylko da się ją wybrać.
+    for (const id of legWanted) {
+      if (id === 403 || hasCard(id)) continue;
+      const card = window.layers.pu.levelables[id];
+      if (!card || !window.run(card.canSelect, card)) continue;
+      const r = takeLeg(id);
+      if (r) return ctx.status(`${mode}: ${r}`);
+    }
+    while (activated.length < maxPerRun) {
       const missing = wanted.filter(id => !hasCard(id));
       if (!missing.length) { note = "wszystkie karty z listy są aktywne"; break; }
       if (pu.storedSelections.lt(1)) { note = `czekam na wybór (${window.player.universe})`; break; }
-      const legOk = id => id < 400 || id > 500 || ctx.p.legForce || (pu.legendarySelectionActive && Number(pu.selectedPunchcards[4]) === id);
+      const legOk = () => true;
       const next = missing.find(id => {
         const card = window.layers.pu.levelables[id];
         return card && legOk(id) && window.run(card.canSelect, card);
@@ -119,23 +128,6 @@ export const casinoKiller = {
       }
       activated.push(next);
       ctx.did();
-    }
-    // Polowanie na legendarną: lista pełna → wylosowane karty jako kolejne losowania slotu legendarnego.
-    if (ctx.p.legFill && !note.startsWith("legendarna") && !wanted.some(id => !hasCard(id))) {
-      const fill = ctx.parseIds(ctx.p.fill);
-      const rank = c => { const i = fill.indexOf(c); return i < 0 ? 999 : i; };
-      while (legWanted.some(id => !hasCard(id)) && activated.length < ctx.p.maxPerRun) {
-        if (offeredLeg()) { const r = takeLeg(offeredLeg()); if (r) { note = r; break; } continue; }
-        if (pu.storedSelections.lt(1)) { note = "polowanie na legendarną: czekam na wybór"; break; }
-        const slots = [0, 1, 2, 3].filter(i => { const c = Number(pu.selectedPunchcards[i]); return c > 0 && c < 400 && !hasCard(c); });
-        if (!slots.length) { note = "polowanie: wszystkie dostępne karty już aktywne — legendarna w tym biegu nie wypadła"; break; }
-        const slot = slots.sort((x, y) => rank(Number(pu.selectedPunchcards[x])) - rank(Number(pu.selectedPunchcards[y])))[0];
-        const card = Number(pu.selectedPunchcards[slot]);
-        pu.selectionIndex = slot; pu.selectionCost = new window.Decimal(1);
-        if (!ctx.click("pu", 10, { refresh: true }) || !hasCard(card)) { note = `przycisk nieaktywny dla ${card}`; break; }
-        activated.push(card); ctx.did();
-        note = "polowanie na legendarną";
-      }
     }
     if (activated.length) ctx.status(`${mode}: aktywowano ${activated.join(", ")}` + (note ? ` · ${note}` : ""));
     else ctx.status(`${mode}: ${note}`);
