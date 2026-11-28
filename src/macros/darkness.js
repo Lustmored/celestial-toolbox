@@ -620,3 +620,46 @@ export const darkGrassPicker = {
     if (n) ctx.did(n);
   },
 };
+
+// Funify (D1, z kartą Jocus 300): reset Funify, gdy wymaganie spełnione, i buyables za Fun Points (najtańszy najpierw).
+// Gra automatyzuje to później (Hope: kamień 14 — funify bez resetu, 17 — buyables), wtedy makro tylko odpuszcza.
+export const funifyLoop = {
+  id: "funify-loop",
+  name: "Funify: resety i buyables",
+  group: "Darkness / SMA",
+  every: 0.25,
+  description:
+    "Z aktywną kartą Jocus (300): robi reset Funify, gdy masz wymagane punkty — chyba że akurat da się zrobić reset LE " +
+    "(ten ma pierwszeństwo, bo daje wybory kart). Kupuje buyables Funify za Fun Points, zawsze najtańszy. " +
+    "Gdy gra automatyzuje Funify (kamienie milowe Hope 14 / 17), makro odpowiednią część pomija.",
+  params: [
+    { key: "reset", label: "Resety Funify", type: "bool", default: true },
+    { key: "buy", label: "Buyables Funify", type: "bool", default: true },
+  ],
+  available: () => Boolean(window.layers.funify?.clickables?.[11]),
+  run(ctx) {
+    const P = window.player, D = window.Decimal;
+    if (!window.getLevelableTier?.("pu", 300, true)) return ctx.status("czekam na kartę Jocus (300)");
+    const did = [];
+    const autoReset = window.hasMilestone("hor", 14), autoBuy = window.hasMilestone("hor", 17);
+    if (ctx.p.reset && !autoReset) {
+      const leReady = P.du.points.gte(P.le.starmetalAlloyReq) && !P.pet.legPetTimers[0].active;
+      const c = window.layers.funify.clickables[11];
+      if (!leReady && !P.le.universeResetSafety && c.canClick()) { c.onClick(); did.push(`reset Funify → ${window.formatWhole(P.funify.funify)}`); }
+    }
+    if (ctx.p.buy && !autoBuy) {
+      const L = window.layers.funify.buyables;
+      let n = 0;
+      for (let g = 0; g < 2000; g++) {
+        const ok = [11, 12, 13, 14, 15, 16].filter(id => L[id] && new D(window.getBuyableAmount("funify", id)).lt(L[id].purchaseLimit()) && L[id].canAfford.call(L[id]));
+        if (!ok.length) break;
+        const id = ok.reduce((a, b) => (Number(L[a].cost()) <= Number(L[b].cost()) ? a : b));
+        L[id].buy.call(L[id]); n++;
+      }
+      if (n) did.push(`buyables +${n}`);
+    }
+    if (did.length) ctx.did(did.length);
+    ctx.status(`Funify ${window.formatWhole(P.funify.funify)} · ${window.format(P.funify.funPoints)} FP` + (did.length ? " · " + did.join(", ") : "") +
+      (autoReset ? " · resety robi gra" : "") + (autoBuy ? " · buyables kupuje gra" : ""));
+  },
+};
