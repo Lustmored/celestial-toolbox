@@ -48,6 +48,7 @@ export const casinoKiller = {
     { key: "cEclipse", label: "Własny: priorytet w Eclipse", type: "text", default: "" },
     { key: "cLeg", label: "Własny: legendarna (401 / 402 / 403, pusto = żadna)", type: "text", default: "" },
     { key: "aniFirst", label: "Aniciffo: nie bierz żadnej karty, dopóki go nie przyzwiesz (7 resetów LE w Eclipse / 10 poza)", type: "bool", default: true },
+    { key: "fillRest", label: "Po wyczerpaniu listy: bierz pozostałe dostępne karty (najniższy poziom najpierw)", type: "bool", default: true },
   ],
   available: g => g.layerActive("pu") && Boolean(window.layers.pu?.clickables?.[10]),
   run(ctx) {
@@ -98,8 +99,17 @@ export const casinoKiller = {
       if (r) return ctx.status(`${mode}: ${r}`);
     }
     while (activated.length < maxPerRun) {
-      const missing = wanted.filter(id => !hasCard(id));
-      if (!missing.length) { note = "wszystkie karty z listy są aktywne"; break; }
+      let missing = wanted.filter(id => !hasCard(id));
+      const selectable = id => { const c = window.layers.pu.levelables[id]; return c && window.run(c.canSelect, c); };
+      if (ctx.p.fillRest && !missing.some(selectable)) {
+        // Lista wyczerpana (albo reszta niedostępna) — dobieramy pozostałe dostępne karty: zwykłe i radioaktywne,
+        // najpierw o najniższym poziomie (najwięcej zyskują na XP). Legendarnych nie ruszamy.
+        const extra = Object.keys(window.player.pu.levelables).map(Number)
+          .filter(id => id > 0 && (id < 400 || (id > 500 && id < 600)) && !hasCard(id) && !missing.includes(id) && selectable(id))
+          .sort((a, b) => Number(window.getLevelableAmount("pu", a)) - Number(window.getLevelableAmount("pu", b)));
+        missing = [...missing, ...extra];
+      }
+      if (!missing.length) { note = "wszystkie dostępne karty są aktywne"; break; }
       if (pu.storedSelections.lt(1)) { note = `czekam na wybór (${window.player.universe})`; break; }
       const legOk = () => true;
       const next = missing.find(id => {
