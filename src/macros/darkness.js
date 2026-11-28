@@ -112,9 +112,12 @@ export const casinoKiller = {
       if (!missing.length) { note = "wszystkie dostępne karty są aktywne"; break; }
       if (pu.storedSelections.lt(1)) { note = `czekam na wybór (${window.player.universe})`; break; }
       const legOk = () => true;
+      const cardCost = id => (id > 400 && id < 500) ? legendaryCost(id) : id > 500 ? ([503, 505, 506].includes(id) ? 2 : 3) : 1;
       const next = missing.find(id => {
         const card = window.layers.pu.levelables[id];
-        return card && legOk(id) && window.run(card.canSelect, card);
+        if (!card || !legOk(id) || !window.run(card.canSelect, card)) return false;
+        // Karty spoza listy (dobieranie): nie czekamy na droższą — bierzemy pierwszą, na którą już nas stać.
+        return wanted.includes(id) || pu.storedSelections.gte(cardCost(id));
       });
       if (next === undefined) { note = `karty ${missing.join(", ")} niedostępne`; break; }
       const leg = next > 400 && next < 500;
